@@ -1,24 +1,26 @@
 // FE-only mock API. Every function mirrors the future Laravel /api endpoint.
 // When BE is ready: replace the body with axios calls, keep the signatures.
 import * as mock from '../data/mock'
+import { unwrapList } from './http'
 
 const delay = (ms = 120) => new Promise(r => setTimeout(r, ms))
+const list = async (fn) => unwrapList(await fn())
 
 export const api = {
   me: async () => { await delay(); return mock.CURRENT_USER },
   login: async ({ email, password }) => { await delay(400); return { token: 'mock-token', user: mock.CURRENT_USER } },
 
-  brands: async () => { await delay(); return mock.brands },
-  teams: async () => { await delay(); return mock.teams },
-  users: async () => { await delay(); return mock.users },
-  domains: async () => { await delay(); return mock.domains },
-  accounts: async () => { await delay(); return mock.accounts },
-  mails: async () => { await delay(); return mock.mails },
-  notifications: async () => { await delay(); return mock.notifications },
-  activities: async () => { await delay(); return mock.activities },
-  loginAudits: async () => { await delay(); return mock.loginAudits },
-  failedJobs: async () => { await delay(); return mock.failedJobs },
-  imapStatus: async () => { await delay(); return mock.imapStatus },
+  brands: async () => list(async () => { await delay(); return mock.brands }),
+  teams: async () => list(async () => { await delay(); return mock.teams }),
+  users: async () => list(async () => { await delay(); return mock.users }),
+  domains: async () => list(async () => { await delay(); return mock.domains }),
+  accounts: async () => list(async () => { await delay(); return mock.accounts }),
+  mails: async () => list(async () => { await delay(); return mock.mails }),
+  notifications: async () => list(async () => { await delay(); return mock.notifications }),
+  activities: async () => list(async () => { await delay(); return mock.activities }),
+  loginAudits: async () => list(async () => { await delay(); return mock.loginAudits }),
+  failedJobs: async () => list(async () => { await delay(); return mock.failedJobs }),
+  imapStatus: async () => list(async () => { await delay(); return mock.imapStatus }),
   dashboard: async () => { await delay(); return mock.dashboardStats },
 
   // Assignment rules (FE preview of BE auto-assign logic)
@@ -60,11 +62,12 @@ export const api = {
     mock.accounts.push(row)
     return row
   },
-  updateAccount: async (id, data) => {
+  updateAccount: async (id, data, updatedAt) => {
     await delay()
+    const payload = updatedAt ? { ...data, updated_at: updatedAt } : data
     const row = mock.accounts.find(a => a.id === Number(id))
-    if (row) Object.assign(row, data)
-    return row || { id, ...data }
+    if (row) Object.assign(row, payload)
+    return row || { id, ...payload }
   },
   assignAccount: async (accountId, userId) => {
     await delay()
@@ -98,6 +101,42 @@ export const api = {
     if (i >= 0) mock.failedJobs.splice(i, 1)
     return { id }
   },
+
+  // Seams reserved by the execution plan. Mock-backed until their BE endpoints land,
+  // so later page edits are a one-line swap and no new seam is invented mid-phase.
+  logout: async () => { await delay(); return true },
+  updateUser: async (id, data) => { await delay(); return { id, ...data } },
+  suspendUser: async (id, payload) => { await delay(); return { id, ...payload, status: 'suspended' } },
+  unsuspendUser: async (id) => { await delay(); return { id, status: 'active' } },
+  restoreUser: async (id) => { await delay(); return { id, status: 'active' } },
+  forceDeleteUser: async (id) => { await delay(); return { id } },
+  resetPassword: async (payload) => { await delay(); return { ...payload } },
+  changePassword: async (payload) => { await delay(); return { ...payload } },
+  addTeamMember: async (teamId, userId) => { await delay(); return { teamId, userId } },
+  removeTeamMember: async (teamId, userId) => { await delay(); return { teamId, userId } },
+  updateAssignment: async (accountId, userId, payload) => { await delay(); return { accountId, userId, ...payload } },
+  setDomainSync: async (id, payload) => { await delay(); return { id, ...payload } },
+  setAccountSync: async (id, payload) => { await delay(); return { id, ...payload } },
+  notificationsPoll: async (after = null) => { await delay(); return { notifications: [], cursor: after, imap_status: [] } },
+
+  opsSummary: async () => { await delay(); return {} },
+  opsSyncRuns: async () => list(async () => { await delay(); return [] }),
+  opsSyncRun: async (id) => { await delay(); return { id } },
+  opsMail: async () => list(async () => { await delay(); return [] }),
+  opsMailDetail: async (id) => { await delay(); return { id } },
+  opsIssues: async () => list(async () => { await delay(); return [] }),
+  opsIssue: async (id) => { await delay(); return { id } },
+  opsStream: async () => list(async () => { await delay(); return [] }),
+  retryOpsJob: async (id) => { await delay(); return { id } },
+  cancelOpsJob: async (id) => { await delay(); return { id } },
+  acknowledgeIssue: async (id, payload) => { await delay(); return { id, ...payload } },
+  resolveIssue: async (id, payload) => { await delay(); return { id, ...payload } },
+  assignIssue: async (id, payload) => { await delay(); return { id, ...payload } },
+  snoozeIssue: async (id, payload) => { await delay(); return { id, ...payload } },
+  startIssue: async (id) => { await delay(); return { id } },
+  closeIssue: async (id) => { await delay(); return { id } },
+  enterMaintenance: async (payload) => { await delay(); return { ...payload } },
+  exitMaintenance: async () => { await delay(); return true },
 }
 
 export default api

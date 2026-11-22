@@ -195,6 +195,7 @@ export default function Webmail() {
 
   useEffect(() => {
     const onMessage = e => {
+      if (e.origin !== window.location.origin) return
       const d = e.data
       if (!d || d.source !== 'snappymail-mock') return
       if (d.type === 'open') {
