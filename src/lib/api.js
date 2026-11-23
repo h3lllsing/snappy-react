@@ -96,6 +96,9 @@ export const api = {
 
   // Mutations write into the shared in-memory store, so changes survive navigation
   // until reload. Swap these bodies for axios calls when the BE is ready.
+  createDomain: async (data) => { if (USE_API) return post('/domains', data); await delay(); return { id: Date.now(), ...data } },
+  deleteDomain: async (id) => { if (USE_API) return (await http.delete(`/domains/${id}`)).data; await delay(); return { id } },
+  deleteAccount: async (id) => { if (USE_API) return (await http.delete(`/email-accounts/${id}`)).data; await delay(); return { id } },
   createBrand: async (data) => {
     if (USE_API) {
       const { data: res } = await http.post('/brands', data)

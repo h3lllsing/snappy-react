@@ -85,10 +85,26 @@ export default function Domains() {
     setAddOpen(true)
   }
 
-  const save = e => {
+  const save = async e => {
     e.preventDefault()
     if (!form.name.trim() || !form.imap_host.trim()) {
       toast('Domain name and IMAP host are required.', 'error', { title: 'Missing fields' }); return
+    }
+    if (!editing) {
+      try {
+        const created = await api.createDomain({
+          name: form.name.trim(), status: form.status,
+          imap_host: form.imap_host.trim(), imap_port: Number(form.imap_port), imap_encryption: form.imap_encryption,
+          smtp_host: form.smtp_host.trim(), smtp_port: Number(form.smtp_port), smtp_encryption: form.smtp_encryption,
+          smtp_username: form.smtp_username.trim(), notes: form.notes,
+        })
+        setDomains(prev => [...prev, { ...created, accounts: 0, created_by: 'Administrator', created_at: new Date().toISOString().slice(0, 10) }])
+        toast(`${form.name.trim()} added.`, 'success', { title: 'Domain created' })
+        setAddOpen(false); setEditing(null); setForm(emptyForm)
+        return
+      } catch (err) {
+        toast(err?.message || 'Could not create domain.', 'error', { title: 'Create failed' }); return
+      }
     }
     if (editing) {
       setDomains(prev => prev.map(d => d.id === editing.id ? {

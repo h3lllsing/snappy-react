@@ -253,7 +253,8 @@ export default function Webmail() {
     navigate(`/webmail/${a.id}`, { replace: true })
   }
 
-  const srcDoc = account ? frameDoc(account.email, accountMails, readIds) : '<html><body style="background:#0b0b10"></body></html>'
+  // Real SnappyMail 2.38.2 is mounted at /webmail/ (served by nginx + PHP-FPM).
+  // The local mock frameDoc is no longer used for the iframe.
 
   return (
     <div className="animate-fade-up">
@@ -315,9 +316,7 @@ export default function Webmail() {
           ref={frameRef}
           key={account ? account.id : 'empty'}
           src="/webmail/"
-          srcDoc={srcDoc}
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-          title={`SnappyMail — ${account ? account.email : 'loading'}`}
+          title={`SnappyMail — ${account ? account.email : 'real webmail'}`}
           className="w-full h-[calc(100vh-19rem)] min-h-[500px] block border-0 bg-[#0b0b10]"
         />
       </div>
