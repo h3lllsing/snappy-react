@@ -7,6 +7,9 @@ const USE_API = import.meta.env.VITE_USE_API === 'true'
 
 const delay = (ms = 120) => new Promise(r => setTimeout(r, ms))
 const list = async (fn) => unwrapList(await fn())
+const get = async (path) => (await http.get(path)).data
+const post = async (path, body) => (await http.post(path, body || {})).data
+const patch = async (path, body) => (await http.patch(path, body || {})).data
 
 export const api = {
   me: async () => {
@@ -242,24 +245,24 @@ export const api = {
   },
   notificationsPoll: async (after = null) => { await delay(); return { notifications: [], cursor: after, imap_status: [] } },
 
-  opsSummary: async () => { await delay(); return {} },
-  opsSyncRuns: async () => list(async () => { await delay(); return [] }),
+  opsSummary: async () => { if (USE_API) return get('/ops/summary'); await delay(); return {} },
+  opsSyncRuns: async () => { if (USE_API) return list(async () => get('/ops/sync-runs')); return list(async () => { await delay(); return [] }) },
   opsSyncRun: async (id) => { await delay(); return { id } },
-  opsMail: async () => list(async () => { await delay(); return [] }),
+  opsMail: async (params) => { if (USE_API) return list(async () => get('/ops/mail' + (params ? '?' + new URLSearchParams(params).toString() : ''))); return list(async () => { await delay(); return [] }) },
   opsMailDetail: async (id) => { await delay(); return { id } },
-  opsIssues: async () => list(async () => { await delay(); return [] }),
+  opsIssues: async () => { if (USE_API) return list(async () => get('/ops/issues')); return list(async () => { await delay(); return [] }) },
   opsIssue: async (id) => { await delay(); return { id } },
-  opsStream: async () => list(async () => { await delay(); return [] }),
+  opsStream: async (after) => { if (USE_API) return get('/ops/stream' + (after ? '?after=' + after : '')); return list(async () => { await delay(); return [] }) },
   retryOpsJob: async (id) => { await delay(); return { id } },
   cancelOpsJob: async (id) => { await delay(); return { id } },
-  acknowledgeIssue: async (id, payload) => { await delay(); return { id, ...payload } },
-  resolveIssue: async (id, payload) => { await delay(); return { id, ...payload } },
-  assignIssue: async (id, payload) => { await delay(); return { id, ...payload } },
-  snoozeIssue: async (id, payload) => { await delay(); return { id, ...payload } },
-  startIssue: async (id) => { await delay(); return { id } },
-  closeIssue: async (id) => { await delay(); return { id } },
-  enterMaintenance: async (payload) => { await delay(); return { ...payload } },
-  exitMaintenance: async () => { await delay(); return true },
+  acknowledgeIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/ack`, payload); await delay(); return { id, ...payload } },
+  resolveIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/resolve`, payload); await delay(); return { id, ...payload } },
+  assignIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/assign`, payload); await delay(); return { id, ...payload } },
+  snoozeIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/snooze`, payload); await delay(); return { id, ...payload } },
+  startIssue: async (id) => { if (USE_API) return patch(`/ops/issues/${id}/start`); await delay(); return { id } },
+  closeIssue: async (id) => { if (USE_API) return patch(`/ops/issues/${id}/close`); await delay(); return { id } },
+  enterMaintenance: async (payload) => { if (USE_API) return post('/ops/maintenance', { ...payload, enabled: true }); await delay(); return { ...payload } },
+  exitMaintenance: async () => { if (USE_API) return post('/ops/maintenance', { enabled: false }); await delay(); return true },
 }
 
 export default api

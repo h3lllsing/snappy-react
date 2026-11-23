@@ -26,6 +26,7 @@ import LoginAudits from './pages/LoginAudits'
 import QueueMonitor from './pages/QueueMonitor'
 import ImapStatus from './pages/ImapStatus'
 import NotFound from './pages/NotFound'
+import OpsConsole from './pages/OpsConsole'
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth()
@@ -78,6 +79,7 @@ export default function App() {
       <Route path="/queue-monitor" element={<Protected roles={['super-admin']}><QueueMonitor /></Protected>} />
       <Route path="/imap-status" element={<Protected roles={['super-admin']}><ImapStatus /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
+      <Route path="/ops" element={<Protected roles={['super-admin','admin']}><OpsConsole /></Protected>} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<NotFound />} />

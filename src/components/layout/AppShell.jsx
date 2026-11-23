@@ -29,6 +29,7 @@ const NAV = [
     { to: '/users', label: 'Users', icon: Users, roles: ['super-admin','admin'] },
   ]},
   { group: 'Administration', items: [
+    { to: '/ops', label: 'Live Operations', icon: Activity, roles: ['super-admin','admin'] },
     { to: '/imap-status', label: 'IMAP Status', icon: Server, roles: ['super-admin'] },
     { to: '/activity-logs', label: 'Activity Logs', icon: Activity, roles: ['super-admin'] },
     { to: '/login-audits', label: 'Login History', icon: ShieldCheck, roles: ['super-admin'] },
