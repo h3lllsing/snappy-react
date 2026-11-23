@@ -9,7 +9,6 @@ import {
 import { Breadcrumbs } from '../components/layout/AppShell'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
-import { teamMembers } from '../data/mock'
 
 export default function TeamOverview() {
   const { user } = useAuth()
@@ -20,6 +19,17 @@ export default function TeamOverview() {
   const [brands, setBrands] = useState([])
   const [expanded, setExpanded] = useState(() => new Set())
 
+  const teamMembers = (leadId) => {
+    const lid = Number(leadId)
+    const teamIds = teams.filter(t => Number(t.lead_id) === lid).map(t => t.id)
+    return users.filter(u => {
+      const cand = u.lead_id ?? u.team_lead_id ?? u.manager_id ?? u.leadId ?? u.teamLeadId
+      if (cand != null && Number(cand) === lid) return true
+      if (u.team_id != null && teamIds.includes(Number(u.team_id))) return true
+      if (u.teamId != null && teamIds.includes(Number(u.teamId))) return true
+      return false
+    })
+  }
   useEffect(() => {
     let alive = true
     Promise.all([api.teams(), api.users(), api.accounts(), api.brands()])

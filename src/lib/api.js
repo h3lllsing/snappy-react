@@ -145,6 +145,16 @@ export const api = {
     if (row) Object.assign(row, payload)
     return row || { id, ...payload }
   },
+  deleteAccount: async (id) => {
+    if (USE_API) {
+      const { data: res } = await http.delete(`/api/email-accounts/${id}`)
+      return res
+    }
+    await delay()
+    const idx = mock.accounts.findIndex(a => a.id === Number(id))
+    if (idx >= 0) mock.accounts.splice(idx, 1)
+    return { id }
+  },
   assignAccount: async (accountId, userId) => {
     if (USE_API) {
       const { data: res } = await http.post(`/api/email-accounts/${accountId}/assign`, { user_id: userId })

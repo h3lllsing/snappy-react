@@ -10,7 +10,6 @@ import {
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api from '../lib/api'
-import { accountsForBrand, leadById, teamMembers } from '../data/mock'
 
 const emptyForm = { domain: '', name: '', lead_id: '', status: 'active' }
 
@@ -38,6 +37,19 @@ export default function Brands() {
   const [preview, setPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
+  const leadById = (id) => users.find(u => u.id === Number(id) || u.id === id)
+  const teamMembers = (leadId) => {
+    const lid = Number(leadId)
+    const teamIds = teams.filter(t => Number(t.lead_id) === lid).map(t => t.id)
+    return users.filter(u => {
+      const cand = u.lead_id ?? u.team_lead_id ?? u.manager_id ?? u.leadId ?? u.teamLeadId
+      if (cand != null && Number(cand) === lid) return true
+      if (u.team_id != null && teamIds.includes(Number(u.team_id))) return true
+      if (u.teamId != null && teamIds.includes(Number(u.teamId))) return true
+      return false
+    })
+  }
+  const accountsForBrand = (domain) => accounts.filter(a => a.brand === domain || a.domain === domain)
   useEffect(() => {
     let alive = true
     Promise.all([api.brands(), api.teams(), api.users(), api.accounts()])

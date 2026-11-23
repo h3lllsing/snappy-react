@@ -111,45 +111,60 @@ export default function Accounts() {
     setAddOpen(true)
   }
 
-  const save = e => {
+  const save = async e => {
     e.preventDefault()
     if (!form.email.trim() || !form.brand_id) {
       toast('Email and domain/brand are required.', 'error', { title: 'Missing fields' }); return
     }
     const brand = brands.find(b => String(b.id) === String(form.brand_id))
-    if (editing) {
-      setAccounts(prev => prev.map(a => a.id === editing.id ? {
-        ...a, email: form.email.trim(), brand: brand?.domain || a.brand,
-        brand_id: Number(form.brand_id), domain_id: Number(form.domain_id),
-        status: form.status, sync_enabled: form.sync_enabled,
-        imap_host: form.imap_host.trim(), smtp_host: form.smtp_host.trim(),
-      } : a))
-      toast(`${form.email.trim()} updated.`, 'success', { title: 'Account saved' })
-    } else {
-      setAccounts(prev => [...prev, {
-        id: Date.now(), email: form.email.trim(), brand: brand?.domain || '',
-        domain_id: Number(form.domain_id), brand_id: Number(form.brand_id),
-        status: form.status, sync: form.sync_enabled ? 'idle' : 'paused',
-        sync_enabled: form.sync_enabled, unread: 0, last_sync: 'never',
-        imap_host: form.imap_host.trim(), smtp_host: form.smtp_host.trim(), assigned: [],
-      }])
-      toast(`${form.email.trim()} was added.`, 'success', { title: 'Account created' })
+    try {
+      if (editing) {
+        const data = {
+          email: form.email.trim(), brand: brand?.domain || editing.brand,
+          brand_id: Number(form.brand_id), domain_id: Number(form.domain_id),
+          status: form.status, sync_enabled: form.sync_enabled,
+          imap_host: form.imap_host.trim(), smtp_host: form.smtp_host.trim(),
+        }
+        const updated = await api.updateAccount(editing.id, data, editing.updated_at)
+        setAccounts(prev => prev.map(a => a.id === editing.id ? { ...a, ...data, ...(updated || {}) } : a))
+        toast(`${form.email.trim()} updated.`, 'success', { title: 'Account saved' })
+      } else {
+        const data = {
+          email: form.email.trim(), brand: brand?.domain || '',
+          domain_id: Number(form.domain_id), brand_id: Number(form.brand_id),
+          status: form.status, sync: form.sync_enabled ? 'idle' : 'paused',
+          sync_enabled: form.sync_enabled, unread: 0, last_sync: 'never',
+          imap_host: form.imap_host.trim(), smtp_host: form.smtp_host.trim(), assigned: [],
+        }
+        const created = await api.createAccount(data)
+        setAccounts(prev => [...prev, created || { id: Date.now(), ...data }])
+        toast(`${form.email.trim()} was added.`, 'success', { title: 'Account created' })
+      }
+      setAddOpen(false); setEditing(null); setForm(emptyForm); setPreview(null)
+    } catch {
+      toast('Could not save account.', 'error', { title: 'Save failed' })
     }
-    setAddOpen(false); setEditing(null); setForm(emptyForm); setPreview(null)
   }
 
-  const runConfirm = () => {
+  const runConfirm = async () => {
     if (!confirm) return
     const { account, action } = confirm
-    if (action === 'delete') {
-      setAccounts(prev => prev.map(a => a.id === account.id ? { ...a, deleted: true } : a))
-      toast(`${account.email} moved to trash.`, 'success', { title: 'Account deleted' })
-    } else if (action === 'restore') {
-      setAccounts(prev => prev.map(a => a.id === account.id ? { ...a, deleted: false } : a))
-      toast(`${account.email} restored.`, 'success', { title: 'Account restored' })
-    } else {
-      setAccounts(prev => prev.filter(a => a.id !== account.id))
-      toast(`${account.email} permanently removed.`, 'success', { title: 'Account purged' })
+    try {
+      if (action === 'delete') {
+        await api.updateAccount(account.id, { deleted: true }, account.updated_at)
+        setAccounts(prev => prev.map(a => a.id === account.id ? { ...a, deleted: true } : a))
+        toast(`${account.email} moved to trash.`, 'success', { title: 'Account deleted' })
+      } else if (action === 'restore') {
+        await api.updateAccount(account.id, { deleted: false }, account.updated_at)
+        setAccounts(prev => prev.map(a => a.id === account.id ? { ...a, deleted: false } : a))
+        toast(`${account.email} restored.`, 'success', { title: 'Account restored' })
+      } else {
+        await api.deleteAccount(account.id)
+        setAccounts(prev => prev.filter(a => a.id !== account.id))
+        toast(`${account.email} permanently removed.`, 'success', { title: 'Account purged' })
+      }
+    } catch {
+      toast('Could not update account.', 'error', { title: 'Action failed' })
     }
     setConfirm(null)
   }

@@ -16,9 +16,16 @@ export default function AccountDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { mails } = useLive()
+  const { mails: liveMails } = useLive()
+  const mails = useMemo(() => {
+    const map = new Map()
+    ;(fetchedMails || []).forEach(m => map.set(m.id, m))
+    ;(liveMails || []).forEach(m => map.set(m.id, m))
+    return [...map.values()]
+  }, [fetchedMails, liveMails])
   const [account, setAccount] = useState(null)
   const [users, setUsers] = useState([])
+  const [fetchedMails, setFetchedMails] = useState([])
   const [loading, setLoading] = useState(true)
   const [perms, setPerms] = useState({})
   const [addUserId, setAddUserId] = useState('')
@@ -28,10 +35,11 @@ export default function AccountDetail() {
     let alive = true
     setLoading(true)
     setAccount(null)
-    Promise.all([api.accounts(), api.users()])
-      .then(([a, u]) => {
+    Promise.all([api.accounts(), api.users(), api.mails()])
+      .then(([a, u, m]) => {
         if (!alive) return
         setUsers(u)
+        setFetchedMails(m || [])
         const found = a.find(x => String(x.id) === String(id))
         if (found) {
           setAccount(found)
@@ -63,8 +71,16 @@ export default function AccountDetail() {
     [mails, account]
   )
 
-  const togglePerm = (uid, key) => {
-    setPerms(p => ({ ...p, [uid]: { ...p[uid], [key]: !(p[uid]?.[key]) } }))
+  const togglePerm = async (uid, key) => {
+    const current = perms[uid] || {}
+    const next = { ...current, [key]: !(current?.[key]) }
+    setPerms(p => ({ ...p, [uid]: next }))
+    try {
+      await api.updateAssignment(account.id, uid, { can_send: next.can_send, can_receive: next.can_receive })
+    } catch {
+      setPerms(p => ({ ...p, [uid]: current }))
+      toast('Could not update assignment.', 'error', { title: 'Update failed' })
+    }
   }
 
   const assign = async () => {
@@ -104,6 +120,17 @@ export default function AccountDetail() {
       toast('Could not start sync.', 'error', { title: 'Sync failed' })
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const toggleSync = async () => {
+    const next = !account.sync_enabled
+    try {
+      await api.setAccountSync(account.id, { sync_enabled: next, reason: next ? 'enabled by user' : 'disabled by user' })
+      setAccount(prev => ({ ...prev, sync_enabled: next, sync: next ? 'idle' : 'paused' }))
+      toast(`Sync ${next ? 'enabled' : 'disabled'} for ${account.email}.`, 'success', { title: 'Sync updated' })
+    } catch {
+      toast('Could not update sync.', 'error', { title: 'Sync update failed' })
     }
   }
 
@@ -159,7 +186,7 @@ export default function AccountDetail() {
                     {live
                       ? <Badge variant="success" dot="live" className="text-[10px]">Live · last sync {account.last_sync}</Badge>
                       : <Badge variant={account.sync === 'syncing' ? 'syncing' : account.sync === 'paused' ? 'paused' : 'info'} dot className="text-[10px]">{account.sync} · last sync {account.last_sync}</Badge>}
-                    <Badge variant={account.sync_enabled ? 'enabled' : 'disabled'} className="text-[10px]">sync {account.sync_enabled ? 'enabled' : 'disabled'}</Badge>
+                    <button onClick={toggleSync} className="cursor-pointer" title="Toggle sync"><Badge variant={account.sync_enabled ? 'enabled' : 'disabled'} className="text-[10px]">sync {account.sync_enabled ? 'enabled' : 'disabled'}</Badge></button>
                   </div>
                 </div>
               </div>

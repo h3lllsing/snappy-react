@@ -45,23 +45,25 @@ export default function DomainDetail() {
 
   const preview = useMemo(() => parseBulk(bulk), [bulk])
 
-  const importAccounts = () => {
+  const importAccounts = async () => {
     if (!preview.length) { toast('Add at least one username:password line.', 'error', { title: 'Nothing to import' }); return }
     setImporting(true)
-    setTimeout(() => {
-      const created = preview.map((x, i) => ({
-        id: Date.now() + i,
+    try {
+      const created = await Promise.all(preview.map(x => api.createAccount({
         email: x.username.includes('@') ? x.username : `${x.username}@${domain.name}`,
         brand: domain.name, domain_id: domain.id,
         status: 'active', sync: 'idle', sync_enabled: true, unread: 0, last_sync: 'pending',
         imap_host: domain.imap_host, smtp_host: domain.smtp_host || domain.imap_host,
         assigned: [], password_set: !!x.password,
-      }))
+      })))
       setAccounts(prev => [...prev, ...created])
       setBulk('')
-      setImporting(false)
       toast(`${created.length} account${created.length === 1 ? '' : 's'} queued for ${domain.name}.`, 'success', { title: 'Bulk import complete' })
-    }, 500)
+    } catch {
+      toast('Could not import accounts.', 'error', { title: 'Bulk import failed' })
+    } finally {
+      setImporting(false)
+    }
   }
 
   if (!domain) return <div className="animate-fade-up"><Breadcrumbs /><Card><EmptyState icon={Globe2} title="Domain not found" message="This domain may have been removed." /></Card></div>
