@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as mock from '../data/mock'
 import { navigateTo } from '../lib/navigation'
+import api from '../lib/api'
 
 const LiveCtx = createContext(null)
 
@@ -8,6 +9,14 @@ export function LiveProvider({ children }) {
   const [mails, setMails] = useState(mock.mails)
   const [notifications, setNotifications] = useState(mock.notifications)
   const [pulse, setPulse] = useState(0)
+
+  useEffect(() => {
+    if (import.meta.env.VITE_USE_API !== 'true') return
+    Promise.all([api.mails(), api.notifications()]).then(([m, n]) => {
+      if (m?.length) setMails(m)
+      if (n?.length) setNotifications(n)
+    }).catch(() => {})
+  }, [])
 
   const unread = useMemo(() => notifications.filter(n => !n.read && !n.deleted).length, [notifications])
   const inboxUnread = useMemo(() => mails.filter(m => m.unread).length, [mails])
@@ -28,11 +37,13 @@ export function LiveProvider({ children }) {
   }, [])
 
   const markRead = useCallback((id) => {
+    if (import.meta.env.VITE_USE_API === 'true') api.markNotificationRead(id).catch(() => {})
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     setMails(prev => prev.map(m => m.id === Number(id) ? { ...m, unread: false } : m))
   }, [])
 
   const markAllRead = useCallback(() => {
+    if (import.meta.env.VITE_USE_API === 'true') api.markAllRead().catch(() => {})
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setMails(prev => prev.map(m => ({ ...m, unread: false })))
   }, [])

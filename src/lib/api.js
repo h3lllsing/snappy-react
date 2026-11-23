@@ -14,14 +14,14 @@ const patch = async (path, body) => (await http.patch(path, body || {})).data
 export const api = {
   me: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/user')
+      const { data } = await http.get('/user')
       return data
     }
     await delay(); return mock.CURRENT_USER
   },
   login: async ({ email, password }) => {
     if (USE_API) {
-      const { data } = await http.post('/api/login', { email, password })
+      const { data } = await http.post('/login', { email, password })
       setBearerToken(data?.token)
       return data
     }
@@ -30,48 +30,48 @@ export const api = {
 
   brands: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/brands')
+      const { data } = await http.get('/brands')
       return unwrapList(data)
     }
     return list(async () => { await delay(); return mock.brands })
   },
   teams: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/teams')
+      const { data } = await http.get('/teams')
       return unwrapList(data)
     }
     return list(async () => { await delay(); return mock.teams })
   },
   users: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/users')
+      const { data } = await http.get('/users')
       return unwrapList(data)
     }
     return list(async () => { await delay(); return mock.users })
   },
   domains: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/domains')
+      const { data } = await http.get('/domains')
       return unwrapList(data)
     }
     return list(async () => { await delay(); return mock.domains })
   },
   accounts: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/email-accounts')
+      const { data } = await http.get('/email-accounts')
       return unwrapList(data)
     }
     return list(async () => { await delay(); return mock.accounts })
   },
-  mails: async () => list(async () => { await delay(); return mock.mails }),
-  notifications: async () => list(async () => { await delay(); return mock.notifications }),
-  activities: async () => list(async () => { await delay(); return mock.activities }),
-  loginAudits: async () => list(async () => { await delay(); return mock.loginAudits }),
-  failedJobs: async () => list(async () => { await delay(); return mock.failedJobs }),
-  imapStatus: async () => list(async () => { await delay(); return mock.imapStatus }),
+  mails: async (params) => { if (USE_API) return list(async () => get('/mails' + (params ? '?' + new URLSearchParams(params).toString() : ''))); return list(async () => { await delay(); return mock.mails }) },
+  notifications: async () => { if (USE_API) return list(async () => get('/notifications')); return list(async () => { await delay(); return mock.notifications }) },
+  activities: async () => { if (USE_API) return list(async () => get('/activity-logs')); return list(async () => { await delay(); return mock.activities }) },
+  loginAudits: async () => { if (USE_API) return list(async () => get('/login-audits')); return list(async () => { await delay(); return mock.loginAudits }) },
+  failedJobs: async () => { if (USE_API) return list(async () => get('/admin/jobs/failed')); return list(async () => { await delay(); return mock.failedJobs }) },
+  imapStatus: async () => { if (USE_API) return list(async () => get('/admin/imap-status')); return list(async () => { await delay(); return mock.imapStatus }) },
   dashboard: async () => {
     if (USE_API) {
-      const { data } = await http.get('/api/dashboard/stats')
+      const { data } = await http.get('/dashboard/stats')
       return data
     }
     await delay(); return mock.dashboardStats
@@ -80,7 +80,7 @@ export const api = {
   // Assignment rules (FE preview of BE auto-assign logic)
   autoAssignPreview: async (account) => {
     if (USE_API) {
-      const { data } = await http.post('/api/email-accounts/auto-assign-preview', account)
+      const { data } = await http.post('/email-accounts/auto-assign-preview', account)
       return data
     }
     await delay()
@@ -98,7 +98,7 @@ export const api = {
   // until reload. Swap these bodies for axios calls when the BE is ready.
   createBrand: async (data) => {
     if (USE_API) {
-      const { data: res } = await http.post('/api/brands', data)
+      const { data: res } = await http.post('/brands', data)
       return res
     }
     await delay()
@@ -108,7 +108,7 @@ export const api = {
   },
   createTeam: async (data) => {
     if (USE_API) {
-      const { data: res } = await http.post('/api/teams', data)
+      const { data: res } = await http.post('/teams', data)
       return res
     }
     await delay()
@@ -118,7 +118,7 @@ export const api = {
   },
   createUser: async (data) => {
     if (USE_API) {
-      const { data: res } = await http.post('/api/users', data)
+      const { data: res } = await http.post('/users', data)
       return res
     }
     await delay()
@@ -128,7 +128,7 @@ export const api = {
   },
   createAccount: async (data) => {
     if (USE_API) {
-      const { data: res } = await http.post('/api/email-accounts', data)
+      const { data: res } = await http.post('/email-accounts', data)
       return res
     }
     await delay()
@@ -139,7 +139,7 @@ export const api = {
   updateAccount: async (id, data, updatedAt) => {
     if (USE_API) {
       const payload = updatedAt ? { ...data, updated_at: updatedAt } : data
-      const { data: res } = await http.put(`/api/email-accounts/${id}`, payload)
+      const { data: res } = await http.put(`/email-accounts/${id}`, payload)
       return res
     }
     await delay()
@@ -150,7 +150,7 @@ export const api = {
   },
   deleteAccount: async (id) => {
     if (USE_API) {
-      const { data: res } = await http.delete(`/api/email-accounts/${id}`)
+      const { data: res } = await http.delete(`/email-accounts/${id}`)
       return res
     }
     await delay()
@@ -160,7 +160,7 @@ export const api = {
   },
   assignAccount: async (accountId, userId) => {
     if (USE_API) {
-      const { data: res } = await http.post(`/api/email-accounts/${accountId}/assign`, { user_id: userId })
+      const { data: res } = await http.post(`/email-accounts/${accountId}/assign`, { user_id: userId })
       return res
     }
     await delay()
@@ -170,7 +170,7 @@ export const api = {
   },
   revokeAssignment: async (accountId, userId) => {
     if (USE_API) {
-      const { data: res } = await http.delete(`/api/email-accounts/${accountId}/assign/${userId}`)
+      const { data: res } = await http.delete(`/email-accounts/${accountId}/assign/${userId}`)
       return res
     }
     await delay()
@@ -180,7 +180,7 @@ export const api = {
   },
   syncAccount: async (id) => {
     if (USE_API) {
-      const { data: res } = await http.post(`/api/email-accounts/${id}/sync`)
+      const { data: res } = await http.post(`/email-accounts/${id}/sync`)
       return res
     }
     await delay(600)
@@ -190,19 +190,21 @@ export const api = {
   },
   webmailToken: async (accountId) => {
     if (USE_API) {
-      const { data: res } = await http.post(`/api/email-accounts/${accountId}/webmail-token`)
+      const { data: res } = await http.post(`/email-accounts/${accountId}/webmail-token`)
       return res
     }
     await delay(); return { token: 'mock-' + accountId, expires_in: 300 }
   },
   markNotificationRead: async (id) => {
+    if (USE_API) return (await http.put(`/notifications/${id}/read`)).data
     await delay()
     const row = mock.notifications.find(n => n.id === id)
     if (row) row.read = true
     return { id }
   },
-  markAllRead: async () => { await delay(); mock.notifications.forEach(n => { n.read = true }); return true },
+  markAllRead: async () => { if (USE_API) return (await http.put('/notifications/read-all')).data; await delay(); mock.notifications.forEach(n => { n.read = true }); return true },
   retryJob: async (id) => {
+    if (USE_API) return post(`/admin/jobs/failed/${id}/retry`)
     await delay()
     const i = mock.failedJobs.findIndex(j => j.id === id)
     if (i >= 0) mock.failedJobs.splice(i, 1)
@@ -213,7 +215,7 @@ export const api = {
   // so later page edits are a one-line swap and no new seam is invented mid-phase.
   logout: async () => {
     if (USE_API) {
-      await http.post('/api/logout')
+      await http.post('/logout')
       setBearerToken(null)
       return true
     }
@@ -231,14 +233,14 @@ export const api = {
   updateAssignment: async (accountId, userId, payload) => { await delay(); return { accountId, userId, ...payload } },
   setDomainSync: async (id, payload) => {
     if (USE_API) {
-      const { data } = await http.patch(`/api/domains/${id}/sync`, payload)
+      const { data } = await http.patch(`/domains/${id}/sync`, payload)
       return data
     }
     await delay(); return { id, ...payload }
   },
   setAccountSync: async (id, payload) => {
     if (USE_API) {
-      const { data } = await http.patch(`/api/email-accounts/${id}/sync`, payload)
+      const { data } = await http.patch(`/email-accounts/${id}/sync`, payload)
       return data
     }
     await delay(); return { id, ...payload }

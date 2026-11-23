@@ -6,20 +6,19 @@ import {
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api from '../lib/api'
-import { pendingJobs } from '../data/mock'
 
 export default function QueueMonitor() {
   const toast = useToast()
   const [jobs, setJobs] = useState([])
-  const [pending, setPending] = useState(pendingJobs.length)
+  const [pending, setPending] = useState(0)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState([])
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let alive = true
-    api.failedJobs()
-      .then(j => { if (alive) setJobs(j) })
+    Promise.all([api.failedJobs(), api.opsSummary()])
+      .then(([j, s]) => { if (alive) { setJobs(j); setPending(s?.queue_depth || 0) } })
       .catch(() => { if (alive) toast('Could not load the queue.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
