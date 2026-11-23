@@ -1,0 +1,42 @@
+name: fe-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install + build
+        run: |
+          npm ci
+          npm run build
+
+      - name: SCA — npm audit
+        run: npm audit --audit-level=high || true
+
+      - name: Secret/history scan (CI gate)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: No planning docs / fixtures in release
+        run: |
+          if find . -path ./node_modules -prune -o -name '*.md' -print | grep -v '^./README.md$'; then
+            echo "unexpected markdown in FE release" && exit 1
+          fi
+          if grep -rniE '127\.0\.0\.1:1143|127\.0\.0\.1:8081' src index.html; then
+            echo "internal endpoint leaked into FE bundle" && exit 1
+          fi

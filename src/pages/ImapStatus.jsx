@@ -65,7 +65,7 @@ export default function ImapStatus() {
           <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
         </span>
-        Auto-refresh enabled — polling the local IMAP mirror on 127.0.0.1:1143 every 30 seconds. Last poll {heartbeat}.
+        Auto-refresh enabled — polling the local IMAP mirror (loopback) every 30 seconds. Last poll {heartbeat}.
       </div>
 
       <Card className="p-0 overflow-hidden">
