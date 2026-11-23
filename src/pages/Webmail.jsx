@@ -152,7 +152,7 @@ button{font:inherit;color:inherit;cursor:pointer}
       '<div class="view-body"><p>Hello team,</p><p>' + esc(m.preview) + '</p>' +
       '<p>Please review the details at your convenience and let us know if any further information is required. This message was delivered to <strong style="color:#c7d2fe">' + esc(DATA.email) + '</strong> and is being displayed from the local IMAP mirror.</p>' +
       '<p>Regards,<br/>' + esc(m.from_name) + '</p>' +
-      '<div class="sig">Sent via SnappyMail · Retrieved from fake IMAP 127.0.0.1:1143 · Message ID #' + m.id + '</div></div>';
+      '<div class="sig">Sent via SnappyMail · Retrieved from local mail mirror (loopback) · Message ID #' + m.id + '</div></div>';
   }
   function wireLabels(){
     Array.prototype.forEach.call(document.querySelectorAll('[data-label]'), function(el){
@@ -197,7 +197,7 @@ export default function Webmail() {
     const onMessage = e => {
       if (e.origin !== window.location.origin) return
       const d = e.data
-      if (!d || d.source !== 'snappymail-mock') return
+      if (!d || (d.source !== 'snappymail-mock' && d.source !== 'snappymail')) return
       if (d.type === 'open') {
         setReadIds(prev => (prev.includes(d.id) ? prev : [...prev, d.id]))
         toast('Opened in SnappyMail', 'success', { title: d.subject || 'Message opened' })
@@ -302,6 +302,7 @@ export default function Webmail() {
           key={account ? account.id : 'empty'}
           src="/webmail/"
           srcDoc={srcDoc}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
           title={`SnappyMail — ${account ? account.email : 'loading'}`}
           className="w-full h-[calc(100vh-19rem)] min-h-[500px] block border-0 bg-[#0b0b10]"
         />
@@ -309,7 +310,7 @@ export default function Webmail() {
 
       <p className="flex items-center gap-2 text-[11px] text-muted mt-2.5">
         <Server size={13} className="text-indigo-500 shrink-0" />
-        Real SnappyMail 2.38.2 iframe mounts here; fake IMAP 127.0.0.1:1143 serves local mirror
+        Real SnappyMail 2.38.2 iframe mounts here; local mail mirror (loopback) serves the local mirror
       </p>
     </div>
   )
