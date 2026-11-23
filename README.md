@@ -26,4 +26,4 @@ npm run dev -- --host 0.0.0.0
 ```
 
 Open http://localhost:5173 (or http://10.20.30.250:5173). Demo login:
-`bilal@alphatach.com` / `ChangeMe123!` (all seeded users use the same password).
+`masoodnasir@msn.com` / `ChangeMe123!` (super admin).
