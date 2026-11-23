@@ -84,6 +84,18 @@ export default function Accounts() {
     })
   }, [accounts, tab, query, brandFilter, statusFilter, assignedFilter, sort])
 
+  const toggleSync = async a => {
+    const next = !(a.sync_enabled !== false)
+    const reason = next ? '' : (window.prompt('Reason for pausing sync (optional):') || '')
+    try {
+      const res = await api.setAccountSync(a.id, { sync_enabled: next, reason })
+      setAccounts(prev => prev.map(x => x.id === a.id ? { ...x, sync_enabled: next, sync: next ? 'idle' : 'paused', effective_sync: res.effective_sync } : x))
+      toast(next ? 'Mailbox sync enabled' : 'Mailbox sync paused', 'success', { title: a.email })
+    } catch {
+      toast('Could not change sync state.', 'error', { title: 'Sync control failed' })
+    }
+  }
+
   const toggleSort = key => setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
   const sortIcon = key => sort.key === key ? (sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : null
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -264,6 +276,12 @@ export default function Accounts() {
                     ) : (
                       <Badge variant={a.sync === 'syncing' ? 'syncing' : a.sync === 'paused' ? 'paused' : 'info'} dot className="text-[10px]">{a.sync}{!a.sync_enabled ? ' · off' : ''}</Badge>
                     )}
+                    <button role="switch" aria-checked={a.sync_enabled !== false}
+                      title={a.sync_enabled === false ? 'Sync off — click to enable' : 'Live — click to pause'}
+                      onClick={() => toggleSync(a)}
+                      className={`ml-2 align-middle w-9 h-5 rounded-full relative inline-block transition-colors ${a.sync_enabled === false ? 'bg-slate-600' : 'bg-emerald-500'}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${a.sync_enabled === false ? 'left-0.5' : 'left-4.5'}`} />
+                    </button>
                   </Td>
                   <Td>
                     {a.unread > 0

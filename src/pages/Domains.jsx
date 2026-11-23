@@ -57,6 +57,18 @@ export default function Domains() {
     })
   }, [domains, tab, query, statusFilter, sort])
 
+  const toggleSync = async d => {
+    const next = !(d.sync_enabled !== false)
+    const reason = next ? '' : (window.prompt('Reason for pausing sync (optional):') || '')
+    try {
+      const res = await api.setDomainSync(d.id, { sync_enabled: next, reason })
+      setDomains(prev => prev.map(x => x.id === d.id ? { ...x, sync_enabled: next, sync: next ? 'idle' : 'paused', effective_sync: res.effective_sync } : x))
+      toast(next ? 'Domain sync enabled' : 'Domain sync paused', 'success', { title: d.name })
+    } catch {
+      toast('Could not change sync state.', 'error', { title: 'Sync control failed' })
+    }
+  }
+
   const toggleSort = key => setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
   const sortIcon = key => sort.key === key ? (sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : null
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -170,6 +182,7 @@ export default function Domains() {
               <Th onClick={() => toggleSort('imap_host')} sort={sortIcon('imap_host')}>IMAP Host</Th>
               <Th onClick={() => toggleSort('encryption')} sort={sortIcon('encryption')}>Encryption</Th>
               <Th onClick={() => toggleSort('created_by')} sort={sortIcon('created_by')}>Created By</Th>
+              <Th>Sync</Th>
               <Th className="text-right">Actions</Th>
             </tr></thead>
             <tbody>
@@ -186,6 +199,13 @@ export default function Domains() {
                   <Td><span className="text-xs font-mono text-muted">{d.imap_host}:{d.imap_port}</span></Td>
                   <Td><Badge variant={d.encryption === 'ssl' || d.encryption === 'tls' ? 'success' : 'warning'} className="text-[10px]"><Lock size={10} /> {(d.encryption || 'none').toUpperCase()}</Badge></Td>
                   <Td><span className="text-xs">{d.created_by}</span></Td>
+                  <Td>
+                    <button role="switch" aria-checked={d.sync_enabled !== false} title={d.sync_enabled === false ? 'Sync is off — click to enable' : 'Sync is live — click to pause'}
+                      onClick={() => toggleSync(d)}
+                      className={`w-9 h-5 rounded-full relative transition-colors ${d.sync_enabled === false ? 'bg-slate-600' : 'bg-emerald-500'}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${d.sync_enabled === false ? 'left-0.5' : 'left-4.5'}`} />
+                    </button>
+                  </Td>
                   <Td>
                     <div className="flex items-center justify-end gap-1.5">
                       {tab === 'trash' ? <>
