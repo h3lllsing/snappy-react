@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Activity, AlertTriangle, ArrowDownLeft, ArrowUpRight, Check, Clock, Inbox, Play, RefreshCw, Server, ShieldAlert, Wrench } from 'lucide-react'
-import { Alert, Badge, Button, Card, CardBody, CardHeader, PageHeader, StatCard, Table, Td, Th, Tr, useToast } from '../components/ui'
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Modal, PageHeader, StatCard, Table, Td, Th, Tr, useToast } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api from '../lib/api'
 
@@ -31,6 +31,7 @@ export default function OpsConsole() {
   const [mail, setMail] = useState(DEMO_MAIL)
   const [direction, setDirection] = useState('in')
   const [loading, setLoading] = useState(false)
+  const [timeline, setTimeline] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -67,6 +68,10 @@ export default function OpsConsole() {
       toast(`Issue #${id}: ${action}`, 'success')
       load()
     } catch { toast('Action failed.', 'error') }
+  }
+
+  const openTimeline = async (id) => {
+    try { setTimeline(await api.opsIssueTimeline(id)) } catch { toast('Timeline unavailable.', 'error') }
   }
 
   const toggleMaintenance = async () => {
@@ -155,6 +160,7 @@ export default function OpsConsole() {
                 {issue.status === 'open' && <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'ack')}><Check size={13} /> Ack</Button>}
                 <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'start')}><Play size={13} /> Start</Button>
                 <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'snooze')}><Clock size={13} /> Snooze</Button>
+                <Button size="sm" variant="secondary" onClick={() => openTimeline(issue.id)}><Clock size={13} /> Timeline</Button>
                 <Button size="sm" variant="success" onClick={() => act(issue.id, 'resolve', 'Resolved from Ops Console')}><Check size={13} /> Resolve</Button>
               </div>
             </div>
@@ -168,6 +174,17 @@ export default function OpsConsole() {
         <span><Inbox size={13} className="inline text-indigo-500" /> Pushed today: {summary.pushed_today}</span>
         <span><RefreshCw size={13} className="inline text-indigo-500" /> Poll every 30s</span>
       </div>
+      <Modal open={!!timeline} onClose={() => setTimeline(null)} title={timeline?.issue ? `Issue #${timeline.issue.id} timeline` : 'Incident timeline'} size="lg">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+          {(timeline?.timeline || []).length === 0 && <p className="text-sm text-muted">No timeline events yet.</p>}
+          {(timeline?.timeline || []).map((e, i) => (
+            <div key={i} className="surface-2 border border-app rounded-xl p-3 flex gap-3">
+              <Badge variant={e.kind === 'action' ? 'info' : 'default'}>{e.kind}</Badge>
+              <div className="min-w-0"><p className="text-sm font-semibold">{e.label}</p><p className="text-[11px] text-muted">{e.at}</p><pre className="text-[10px] mt-1 whitespace-pre-wrap break-all">{JSON.stringify(e.payload || {})}</pre></div>
+            </div>
+          ))}
+        </div>
+      </Modal>
     </>
   )
 }
