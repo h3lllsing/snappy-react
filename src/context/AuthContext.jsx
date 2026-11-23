@@ -18,8 +18,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!user) return
+    const seen = new Set()
     const onMail = (mail) => {
       if (!mail || !mail.mail_id) return
+      const key = String(mail.mail_id)
+      if (seen.has(key)) return
+      seen.add(key)
       live.addIncoming(mail)
       toast(`${mail.from || ''} — ${mail.subject || ''}`, 'info', {
         title: `New mail in ${mail.account || 'mailbox'}`,
