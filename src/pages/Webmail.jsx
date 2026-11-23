@@ -188,6 +188,8 @@ export default function Webmail() {
   const [activeId, setActiveId] = useState(() => Number(id) || 1)
   const [readIds, setReadIds] = useState([])
   const frameRef = useRef(null)
+  const formRef = useRef(null)
+  const ssoDone = useRef(null)
 
   useEffect(() => {
     frameRef.current?.contentWindow?.postMessage(
@@ -248,10 +250,32 @@ export default function Webmail() {
     return Array.from(map.entries())
   }, [accounts])
 
+  // Portal -> SnappyMail secure SSO: request a single-use token from Laravel,
+  // then POST it to the bridge which redirects the iframe into an authenticated session.
+  const startSso = async a => {
+    if (!a || ssoDone.current === a.id) return
+    ssoDone.current = a.id
+    try {
+      const res = await api.webmailToken(a.id)
+      const form = formRef.current
+      if (!form || !res?.token) throw new Error('No SSO token')
+      form.elements.t.value = res.token
+      form.submit()
+    } catch (err) {
+      ssoDone.current = null
+      toast(err?.message || 'Could not start webmail session.', 'error', { title: 'SnappyMail SSO' })
+    }
+  }
+
   const selectAccount = a => {
     setActiveId(a.id)
     navigate(`/webmail/${a.id}`, { replace: true })
+    startSso(a)
   }
+
+  useEffect(() => {
+    if (account && ssoDone.current !== account.id) startSso(account)
+  }, [account])
 
   // Real SnappyMail 2.38.2 is mounted at /webmail/ (served by nginx + PHP-FPM).
   // The local mock frameDoc is no longer used for the iframe.
@@ -311,9 +335,14 @@ export default function Webmail() {
         </div>
       </div>
 
+      <form ref={formRef} method="post" action="/webmail/portal-sso.php" target="snappyFrame" className="hidden">
+        <input type="hidden" name="t" value="" />
+      </form>
+
       <div className="surface border border-app rounded-2xl overflow-hidden shadow-2xl shadow-indigo-950/20">
         <iframe
           ref={frameRef}
+          name="snappyFrame"
           key={account ? account.id : 'empty'}
           src="/webmail/"
           title={`SnappyMail — ${account ? account.email : 'real webmail'}`}
