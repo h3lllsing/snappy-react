@@ -29,6 +29,33 @@ export default function Domains() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [confirm, setConfirm] = useState(null)
+  const [discovering, setDiscovering] = useState(false)
+  const [detectedSource, setDetectedSource] = useState(null)
+
+  useEffect(() => {
+    if (!addOpen || editing || !form.name.trim()) return
+    let alive = true
+    setDiscovering(true)
+    const t = setTimeout(() => {
+      api.discoverDomain(form.name.trim())
+        .then(d => {
+          if (!alive) return
+          setForm(f => ({
+            ...f,
+            imap_host: d.imap_host || f.imap_host,
+            imap_port: String(d.imap_port || f.imap_port),
+            imap_encryption: d.imap_encryption || f.imap_encryption,
+            smtp_host: d.smtp_host || f.smtp_host,
+            smtp_port: String(d.smtp_port || f.smtp_port),
+            smtp_encryption: d.smtp_encryption || f.smtp_encryption,
+          }))
+          setDetectedSource(d.source || 'auto')
+        })
+        .catch(() => { if (alive) setDetectedSource(null) })
+        .finally(() => { if (alive) setDiscovering(false) })
+    }, 350)
+    return () => { alive = false; clearTimeout(t) }
+  }, [addOpen, editing, form.name])
 
   useEffect(() => {
     let alive = true
@@ -87,8 +114,8 @@ export default function Domains() {
 
   const save = async e => {
     e.preventDefault()
-    if (!form.name.trim() || !form.imap_host.trim()) {
-      toast('Domain name and IMAP host are required.', 'error', { title: 'Missing fields' }); return
+    if (!form.name.trim()) {
+      toast('Domain name is required.', 'error', { title: 'Missing field' }); return
     }
     if (!editing) {
       try {
@@ -257,22 +284,38 @@ export default function Domains() {
             <Field label="Domain name" required hint="e.g. newbrand.com"><Input value={form.name} onChange={set('name')} placeholder="newbrand.com" /></Field>
             <Field label="Status"><Select value={form.status} onChange={set('status')}><option value="active">active</option><option value="suspended">suspended</option></Select></Field>
           </div>
-          <div className="rounded-xl surface-2 border border-app p-4 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">IMAP settings</p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Host" required><Input value={form.imap_host} onChange={set('imap_host')} placeholder="mail.newbrand.com" /></Field>
-              <Field label="Port"><Input type="number" value={form.imap_port} onChange={set('imap_port')} /></Field>
-              <Field label="Encryption"><Select value={form.imap_encryption} onChange={set('imap_encryption')}><option value="ssl">SSL</option><option value="tls">TLS</option><option value="none">None</option></Select></Field>
+          <div className="rounded-xl surface-2 border border-app p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Mail settings</p>
+                <p className="text-xs text-muted">
+                  {discovering ? 'Detecting from DNS…' : detectedSource ? `Auto-detected via ${detectedSource}` : 'Auto-detected from the domain name — override below if needed.'}
+                </p>
+              </div>
+              {detectedSource && <Badge variant="success">Auto</Badge>}
             </div>
-          </div>
-          <div className="rounded-xl surface-2 border border-app p-4 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-purple-500">SMTP settings</p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Host"><Input value={form.smtp_host} onChange={set('smtp_host')} placeholder="mail.newbrand.com" /></Field>
-              <Field label="Port"><Input type="number" value={form.smtp_port} onChange={set('smtp_port')} /></Field>
-              <Field label="Encryption"><Select value={form.smtp_encryption} onChange={set('smtp_encryption')}><option value="tls">TLS</option><option value="ssl">SSL</option><option value="none">None</option></Select></Field>
-            </div>
-            <Field label="SMTP username"><Input value={form.smtp_username} onChange={set('smtp_username')} placeholder="smtp@newbrand.com" /></Field>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-indigo-500 hover:underline">Advanced: edit IMAP / SMTP manually</summary>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500 mb-2">IMAP settings</p>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field label="Host"><Input value={form.imap_host} onChange={set('imap_host')} placeholder="mail.newbrand.com" /></Field>
+                    <Field label="Port"><Input type="number" value={form.imap_port} onChange={set('imap_port')} /></Field>
+                    <Field label="Encryption"><Select value={form.imap_encryption} onChange={set('imap_encryption')}><option value="ssl">SSL</option><option value="tls">TLS</option><option value="none">None</option></Select></Field>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-2">SMTP settings</p>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field label="Host"><Input value={form.smtp_host} onChange={set('smtp_host')} placeholder="mail.newbrand.com" /></Field>
+                    <Field label="Port"><Input type="number" value={form.smtp_port} onChange={set('smtp_port')} /></Field>
+                    <Field label="Encryption"><Select value={form.smtp_encryption} onChange={set('smtp_encryption')}><option value="tls">TLS</option><option value="ssl">SSL</option><option value="none">None</option></Select></Field>
+                  </div>
+                  <div className="mt-4"><Field label="SMTP username"><Input value={form.smtp_username} onChange={set('smtp_username')} placeholder="smtp@newbrand.com" /></Field></div>
+                </div>
+              </div>
+            </details>
           </div>
           <Field label="Notes"><Textarea rows={3} value={form.notes} onChange={set('notes')} placeholder="Internal notes about this domain…" /></Field>
         </form>

@@ -96,6 +96,7 @@ export const api = {
 
   // Mutations write into the shared in-memory store, so changes survive navigation
   // until reload. Swap these bodies for axios calls when the BE is ready.
+  discoverDomain: async (domain) => { if (USE_API) return post('/domains/discover', { domain }); await delay(); return { domain, imap_host: 'mail.' + domain, imap_port: 993, imap_encryption: 'ssl', smtp_host: 'mail.' + domain, smtp_port: 587, smtp_encryption: 'tls', source: 'mock-convention' } },
   createDomain: async (data) => { if (USE_API) return post('/domains', data); await delay(); return { id: Date.now(), ...data } },
   deleteDomain: async (id) => { if (USE_API) return (await http.delete(`/domains/${id}`)).data; await delay(); return { id } },
   deleteAccount: async (id) => { if (USE_API) return (await http.delete(`/email-accounts/${id}`)).data; await delay(); return { id } },
