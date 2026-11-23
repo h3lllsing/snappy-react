@@ -1,22 +1,29 @@
-// Reverb/Echo integration stub. Uncomment connectEcho() when the BE is ready;
-// the FE already renders live updates through LiveContext, so no page rewrite is needed.
+// Reverb/Echo integration. Live state stays in LiveContext, so only the event
+// source changes when the backend is available.
 import Echo from 'laravel-echo'
 import Pusher from 'pusher-js'
 
 let echo = null
 
 export function connectEcho(user, handlers = {}) {
-  // echo = new Echo({
-  //   broadcaster: 'reverb',
-  //   key: import.meta.env.VITE_REVERB_APP_KEY,
-  //   wsHost: import.meta.env.VITE_REVERB_HOST,
-  //   wsPort: import.meta.env.VITE_REVERB_PORT,
-  //   forceTLS: true,
-  //   enabledTransports: ['ws', 'wss'],
-  // })
-  // ;['user', 'team', 'brand'].forEach(scope => {
-  //   if (user[`${scope}_id`]) echo.private(`${scope}.${user[`${scope}_id`]}`).listen('.new-email', handlers.onNewEmail)
-  // })
+  const key = import.meta.env.VITE_REVERB_APP_KEY
+  if (!user || !key || import.meta.env.VITE_USE_API !== 'true') return null
+
+  window.Pusher = Pusher
+  echo = new Echo({
+    broadcaster: 'reverb',
+    key,
+    wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
+    wsPort: Number(import.meta.env.VITE_REVERB_PORT || 443),
+    wsPath: '/app',
+    forceTLS: true,
+    enabledTransports: ['ws', 'wss'],
+  })
+
+  echo.private(`user.${user.id}`).listen('.new-email', handlers.onNewEmail)
+  if (user.team_id) echo.private(`team.${user.team_id}`).listen('.new-email', handlers.onNewEmail)
+  if (user.brand_id) echo.private(`brand.${user.brand_id}`).listen('.new-email', handlers.onNewEmail)
+
   return echo
 }
 
@@ -25,7 +32,7 @@ export function disconnectEcho() {
   echo = null
 }
 
-// FE reference stream: emits a realistic incoming-mail event every 20 seconds.
+// Demo stream only used while the mock API is active.
 export function startDemoStream(onEvent) {
   const senders = [
     { from: 'rebecca@penguinrandomhouse.com', from_name: 'Rebecca Wilson', brand: 'xuz.com', account: 'sales@xuz.com', account_id: 1, subject: 'Re: Final cover approval — The Bears' },
@@ -36,18 +43,11 @@ export function startDemoStream(onEvent) {
   const id = setInterval(() => {
     const s = senders[i++ % senders.length]
     onEvent?.({
-      id: Date.now(),
-      mail_id: Date.now(),
-      account: s.account,
-      account_id: s.account_id,
-      brand: s.brand,
-      from: s.from,
-      from_name: s.from_name,
-      subject: s.subject,
+      id: Date.now(), mail_id: Date.now(),
+      account: s.account, account_id: s.account_id, brand: s.brand,
+      from: s.from, from_name: s.from_name, subject: s.subject,
       preview: 'This message arrived live. It appears on every dashboard and in SnappyMail without a refresh.',
-      time: 'just now',
-      unread: true,
-      has_attachment: i % 2 === 0,
+      time: 'just now', unread: true, has_attachment: i % 2 === 0,
     })
   }, 20000)
   return () => clearInterval(id)

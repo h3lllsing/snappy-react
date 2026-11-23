@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bell, Mail, Server, X } from 'lucide-react'
 import { useToast } from '../components/ui'
@@ -168,6 +168,11 @@ button{font:inherit;color:inherit;cursor:pointer}
     });
   }
   function render(){ renderFolders(); renderRows(); renderView(); wireLabels(); }
+  window.addEventListener('message', function(e){
+    if (e.origin !== location.origin || !e.data || e.data.source !== 'portal' || e.data.type !== 'refresh') return;
+    document.title = 'SnappyMail · live refresh #' + e.data.pulse;
+    render();
+  });
   render();
 })();
 </script>
@@ -182,6 +187,14 @@ export default function Webmail() {
   const [accounts, setAccounts] = useState([])
   const [activeId, setActiveId] = useState(() => Number(id) || 1)
   const [readIds, setReadIds] = useState([])
+  const frameRef = useRef(null)
+
+  useEffect(() => {
+    frameRef.current?.contentWindow?.postMessage(
+      { source: 'portal', type: 'refresh', pulse },
+      window.location.origin,
+    )
+  }, [pulse])
 
   useEffect(() => { if (id) setActiveId(Number(id) || 1) }, [id])
 
@@ -299,6 +312,7 @@ export default function Webmail() {
 
       <div className="surface border border-app rounded-2xl overflow-hidden shadow-2xl shadow-indigo-950/20">
         <iframe
+          ref={frameRef}
           key={account ? account.id : 'empty'}
           src="/webmail/"
           srcDoc={srcDoc}

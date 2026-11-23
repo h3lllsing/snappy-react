@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import api from '../lib/api'
-import { disconnectEcho, startDemoStream } from '../lib/echo'
+import { connectEcho, disconnectEcho, startDemoStream } from '../lib/echo'
 import { useToast } from '../components/ui'
 import { useLive } from './LiveContext'
 
@@ -18,14 +18,18 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!user) return
-    return startDemoStream((mail) => {
+    const onMail = (mail) => {
+      if (!mail || !mail.mail_id) return
       live.addIncoming(mail)
-      toast(`${mail.from} — ${mail.subject}`, 'info', {
-        title: `New mail in ${mail.account} · ${mail.brand}`,
+      toast(`${mail.from || ''} — ${mail.subject || ''}`, 'info', {
+        title: `New mail in ${mail.account || 'mailbox'}`,
         duration: 8000,
         action: { label: 'Open in SnappyMail', onClick: () => live.openWebmail(mail.account_id) },
       })
-    })
+    }
+    const liveEcho = connectEcho(user, { onNewEmail: onMail })
+    if (liveEcho) return () => disconnectEcho()
+    return startDemoStream(onMail)
   }, [user, toast, live])
 
   const login = async (credentials) => {
