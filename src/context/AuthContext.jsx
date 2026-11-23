@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import api from '../lib/api'
 import { connectEcho, disconnectEcho, startDemoStream } from '../lib/echo'
 import { useToast } from '../components/ui'
@@ -29,7 +29,34 @@ export function AuthProvider({ children }) {
     }
     const liveEcho = connectEcho(user, { onNewEmail: onMail })
     if (liveEcho) return () => disconnectEcho()
-    return startDemoStream(onMail)
+    if (import.meta.env.VITE_USE_API !== 'true') return startDemoStream(onMail)
+
+    // Live demo against the real DB: poll the notification cursor endpoint.
+    let alive = true
+    let cursor = null
+    const tick = async () => {
+      try {
+        const res = await api.notificationsPoll(cursor)
+        if (!alive || !res) return
+        const items = res.notifications || []
+        if (cursor !== null && items.length) {
+          items.forEach(n => onMail({
+            mail_id: Number(n.id) || Date.now(),
+            account: (n.title || '').match(/in\s+([^\s]+)/)?.[1] || 'mailbox',
+            account_id: 1,
+            brand: (n.title || '').match(/in\s+([^\s]+)/)?.[1]?.split('@')[1] || 'portal',
+            from: n.detail || '',
+            subject: n.title || 'New notification',
+            time: 'just now',
+            unread: true,
+          }))
+        }
+        cursor = res.cursor ?? cursor ?? 0
+      } catch { /* keep polling */ }
+    }
+    tick()
+    const id = setInterval(tick, 5000)
+    return () => { alive = false; clearInterval(id) }
   }, [user, toast, live])
 
   const login = async (credentials) => {

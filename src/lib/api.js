@@ -243,7 +243,7 @@ export const api = {
     }
     await delay(); return { id, ...payload }
   },
-  notificationsPoll: async (after = null) => { await delay(); return { notifications: [], cursor: after, imap_status: [] } },
+  notificationsPoll: async (after = null) => { if (USE_API) return get('/notifications/poll' + (after ? '?after=' + after : '')); await delay(); return { notifications: [], cursor: after, imap_status: [] } },
 
   opsSummary: async () => { if (USE_API) return get('/ops/summary'); await delay(); return {} },
   opsSyncRuns: async () => { if (USE_API) return list(async () => get('/ops/sync-runs')); return list(async () => { await delay(); return [] }) },
