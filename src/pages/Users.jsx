@@ -62,61 +62,72 @@ export default function Users() {
     setAddOpen(true)
   }
 
-  const saveUser = e => {
+  const saveUser = async e => {
     e.preventDefault()
     if (!form.name.trim() || !form.email.trim() || (!editing && !form.password)) {
       toast('Name, email and password are required.', 'error', { title: 'Missing fields' })
       return
     }
     if (editing) {
-      setUsers(prev => prev.map(u => u.id === editing.id ? {
-        ...u, name: form.name.trim(), email: form.email.trim(), role: form.role, status: form.status,
+      const payload = {
+        name: form.name.trim(), email: form.email.trim(), role: form.role, status: form.status,
         team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null,
-        team: form.team_lead_id ? (leads.find(l => String(l.id) === form.team_lead_id)?.team || u.team) : '—',
-      } : u))
+        team: form.team_lead_id ? (leads.find(l => String(l.id) === form.team_lead_id)?.team || editing.team) : '—',
+      }
+      await api.updateUser(editing.id, payload)
+      setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...payload } : u))
       toast(`${form.name.trim()} updated.`, 'success', { title: 'User saved' })
     } else {
       const lead = leads.find(l => String(l.id) === form.team_lead_id)
-      const created = {
-        id: Date.now(), name: form.name.trim(), email: form.email.trim(), role: form.role,
+      const payload = {
+        name: form.name.trim(), email: form.email.trim(), password: form.password, role: form.role,
         team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null,
-        team: lead?.team || '—', status: form.status, last_login: 'never', accounts: 0,
+        team: lead?.team || '—', status: form.status,
       }
-      setUsers(prev => [...prev, created])
-      toast(`${created.name} was added as ${created.role}.`, 'success', { title: 'User created' })
+      const created = await api.createUser(payload)
+      const row = created || { id: Date.now(), ...payload, last_login: 'never', accounts: 0 }
+      setUsers(prev => [...prev, { last_login: 'never', accounts: 0, ...row }])
+      toast(`${row.name} was added as ${row.role}.`, 'success', { title: 'User created' })
     }
     setAddOpen(false)
     setEditing(null)
     setForm(emptyForm)
   }
 
-  const toggleSuspend = u => {
+  const toggleSuspend = async u => {
     if (u.status === 'active') { setSuspendTarget(u); setReason('') }
     else {
+      await api.unsuspendUser(u.id)
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'active', suspension_reason: null } : x))
       toast(`${u.name} is active again.`, 'success', { title: 'User unsuspended' })
     }
   }
 
-  const applySuspend = () => {
+  const applySuspend = async () => {
     if (!suspendTarget) return
+    const r = reason.trim() || 'Suspended by administrator'
+    await api.suspendUser(suspendTarget.id, r)
     setUsers(prev => prev.map(x => x.id === suspendTarget.id ? {
-      ...x, status: 'suspended', suspension_reason: reason.trim() || 'Suspended by administrator',
+      ...x, status: 'suspended', suspension_reason: r,
     } : x))
     toast(`${suspendTarget.name} was suspended.`, 'warning', { title: 'User suspended' })
     setSuspendTarget(null)
   }
 
-  const runConfirm = () => {
+  const runConfirm = async () => {
     if (!confirm) return
     const { user, action } = confirm
     if (action === 'delete') {
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, deleted: true, deleted_at: new Date().toISOString() } : u))
+      const deleted_at = new Date().toISOString()
+      await api.updateUser(user.id, { deleted: true, deleted_at })
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, deleted: true, deleted_at } : u))
       toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' })
     } else if (action === 'restore') {
+      await api.restoreUser(user.id)
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, deleted: false, deleted_at: null } : u))
       toast(`${user.name} restored.`, 'success', { title: 'User restored' })
     } else if (action === 'force') {
+      await api.forceDeleteUser(user.id)
       setUsers(prev => prev.filter(u => u.id !== user.id))
       toast(`${user.name} permanently removed.`, 'success', { title: 'User purged' })
     }

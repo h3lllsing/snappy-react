@@ -3,6 +3,7 @@ import { Eye, EyeOff, KeyRound, Lock, Moon, Save, ShieldCheck, Sun, User } from 
 import { Alert, Avatar, Badge, Button, Card, CardBody, CardHeader, Divider, Field, Input, PageHeader, useToast } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
+import api from '../../lib/api'
 
 export default function Profile() {
   const { user, setUser } = useAuth()
@@ -44,6 +45,8 @@ export default function Profile() {
     }
     setLoading(true)
     await new Promise(r => setTimeout(r, 400))
+    await api.updateUser(user.id, { name: form.name.trim(), email: form.email.trim() })
+    if (changingPassword) await api.changePassword({ current_password: form.current_password, password: form.password })
     setUser(u => ({ ...u, name: form.name.trim(), email: form.email.trim() }))
     setForm(f => ({ ...f, current_password: '', password: '', password_confirmation: '' }))
     setLoading(false)

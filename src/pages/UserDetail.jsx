@@ -63,30 +63,39 @@ export default function UserDetail() {
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const save = () => {
+  const save = async () => {
     if (!form.name.trim() || !form.email.trim()) {
       toast('Name and email are required.', 'error', { title: 'Missing fields' }); return
     }
     const lead = leads.find(l => String(l.id) === form.team_lead_id)
-    setUser(prev => ({ ...prev, ...form, name: form.name.trim(), email: form.email.trim(), team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null, team: lead?.team || (form.team_lead_id ? prev.team : '—') }))
+    const payload = { ...form, name: form.name.trim(), email: form.email.trim(), team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null, team: lead?.team || (form.team_lead_id ? user?.team : '—') }
+    await api.updateUser(user.id, payload)
+    setUser(prev => ({ ...prev, ...payload }))
     setEditOpen(false)
     toast(`${form.name.trim()} updated.`, 'success', { title: 'User saved' })
   }
 
-  const toggleSuspend = () => {
+  const toggleSuspend = async () => {
     if (user.status === 'active') { setReason(''); setSuspendOpen(true); return }
+    await api.unsuspendUser(user.id)
     setUser(prev => ({ ...prev, status: 'active', suspension_reason: null }))
     toast(`${user.name} is active again.`, 'success', { title: 'User unsuspended' })
   }
 
-  const applySuspend = () => {
-    setUser(prev => ({ ...prev, status: 'suspended', suspension_reason: reason.trim() || 'Suspended by administrator' }))
+  const applySuspend = async () => {
+    const r = reason.trim() || 'Suspended by administrator'
+    await api.suspendUser(user.id, r)
+    setUser(prev => ({ ...prev, status: 'suspended', suspension_reason: r }))
     setSuspendOpen(false)
     toast(`${user.name} was suspended.`, 'warning', { title: 'User suspended' })
   }
 
-  const remove = () => {
-    if (confirm === 'delete') { toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' }); navigate('/users') }
+  const remove = async () => {
+    if (confirm === 'delete') {
+      const deleted_at = new Date().toISOString()
+      await api.updateUser(user.id, { deleted: true, deleted_at })
+      toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' }); navigate('/users')
+    }
     else { toast('Role elevated to super-admin (demo).', 'info', { title: 'Permissions updated' }) }
     setConfirm(null)
   }
