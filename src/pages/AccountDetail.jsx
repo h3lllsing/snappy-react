@@ -17,12 +17,6 @@ export default function AccountDetail() {
   const navigate = useNavigate()
   const toast = useToast()
   const { mails: liveMails } = useLive()
-  const mails = useMemo(() => {
-    const map = new Map()
-    ;(fetchedMails || []).forEach(m => map.set(m.id, m))
-    ;(liveMails || []).forEach(m => map.set(m.id, m))
-    return [...map.values()]
-  }, [fetchedMails, liveMails])
   const [account, setAccount] = useState(null)
   const [users, setUsers] = useState([])
   const [fetchedMails, setFetchedMails] = useState([])
@@ -30,6 +24,12 @@ export default function AccountDetail() {
   const [perms, setPerms] = useState({})
   const [addUserId, setAddUserId] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const mails = useMemo(() => {
+    const map = new Map()
+    ;(fetchedMails || []).forEach(m => map.set(m.id, m))
+    ;(liveMails || []).forEach(m => map.set(m.id, m))
+    return [...map.values()]
+  }, [fetchedMails, liveMails])
 
   useEffect(() => {
     let alive = true
