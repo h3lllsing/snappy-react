@@ -95,7 +95,7 @@ export function StatusDot({ status }) {
 
 /* ---------- Avatar ---------- */
 export function Avatar({ name = '', size = 'md' }) {
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?'
+  const initials = String(name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?'
   const sz = size === 'sm' ? 'w-7 h-7 text-[10px]' : size === 'lg' ? 'w-12 h-12 text-sm' : 'w-9 h-9 text-xs'
   return <span className={cx('inline-flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold shrink-0', sz)}>{initials}</span>
 }

@@ -257,7 +257,7 @@ export default function Brands() {
                       )}
                     </div>
                     <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
-                      <span className="flex items-center gap-1.5"><Sparkles size={12} className="text-indigo-500" /> Rule: {brand.domain} → {brand.lead_name} → {brand.lead_name.split(' ')[0]}’s whole team gets all {brand.domain} mailboxes automatically.</span>
+                      <span className="flex items-center gap-1.5"><Sparkles size={12} className="text-indigo-500" /> Rule: {brand.domain} → {brand.lead_name} → {String(brand.lead_name ?? '').split(' ')[0]}’s whole team gets all {brand.domain} mailboxes automatically.</span>
                       {firstAccountId(brand) && <Link to={`/webmail/${firstAccountId(brand)}`} className="font-semibold text-indigo-500 hover:underline">Open Webmail →</Link>}
                     </div>
                   </div>
