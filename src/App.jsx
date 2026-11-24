@@ -8,6 +8,7 @@ import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import Profile from './pages/auth/Profile'
+import ChangePassword from './pages/ChangePassword'
 import Dashboard from './pages/Dashboard'
 import Brands from './pages/Brands'
 import Teams from './pages/Teams'
@@ -81,6 +82,7 @@ export default function App() {
       <Route path="/queue-monitor" element={<Protected roles={['super-admin']}><QueueMonitor /></Protected>} />
       <Route path="/imap-status" element={<Protected roles={['super-admin']}><ImapStatus /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
+      <Route path="/change-password" element={<Protected><ChangePassword /></Protected>} />
       <Route path="/ops" element={<Protected roles={['super-admin','admin']}><OpsConsole /></Protected>} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

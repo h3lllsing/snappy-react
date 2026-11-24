@@ -69,6 +69,14 @@ http.interceptors.response.use(
         window.location.assign('/login')
       }
     }
+    if (status === 403 && data?.code === 'password_change_required') {
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname
+        if (path !== '/change-password' && !path.startsWith('/login')) {
+          window.location.assign('/change-password')
+        }
+      }
+    }
     return Promise.reject(new ApiError(status, message, data.errors || null, retryAfter))
   },
 )
