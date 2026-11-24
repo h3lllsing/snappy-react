@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Mail, Server, X } from 'lucide-react'
+import { ArrowLeft, Bell, ChevronDown, Globe2, Mail, Server, Users, X } from 'lucide-react'
 import { useToast } from '../components/ui'
 import { useLive } from '../context/LiveContext'
+import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
 
 const frameDoc = (email, mails, readIds) => {
@@ -183,10 +184,12 @@ export default function Webmail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { user } = useAuth()
   const { mails, unread, pulse } = useLive()
   const [accounts, setAccounts] = useState([])
   const [activeId, setActiveId] = useState(() => Number(id) || 1)
   const [readIds, setReadIds] = useState([])
+  const [accessData, setAccessData] = useState({ scope: 'assigned', domains: [] })
   const frameRef = useRef(null)
   const formRef = useRef(null)
   const ssoDone = useRef(null)
@@ -207,6 +210,12 @@ export default function Webmail() {
       .catch(() => { if (alive) toast('Could not load the mailbox.', 'error', { title: 'Webmail' }) })
     return () => { alive = false }
   }, [toast])
+
+  useEffect(() => {
+    api.domainAccess()
+      .then(d => { if (d) setAccessData(d) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const onMessage = e => {
@@ -310,6 +319,35 @@ export default function Webmail() {
         </div>
       </div>
 
+      <div className="surface border border-app rounded-2xl mb-3 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Mail size={15} className="text-indigo-500 shrink-0" />
+          <select
+            aria-label="Switch email account"
+            value={account?.id ?? ''}
+            onChange={e => {
+              const acc = accounts.find(a => String(a.id) === e.target.value)
+              if (acc) selectAccount(acc)
+            }}
+            className="w-full sm:max-w-md rounded-xl border border-app surface-2 px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          >
+            {grouped.map(([brand, items]) => (
+              <optgroup key={brand} label={brand}>
+                {items.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.email}{unreadFor(a) ? ` (${unreadFor(a)} unread)` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <ChevronDown size={14} className="text-muted shrink-0 -ml-6 pointer-events-none" />
+        </div>
+        <span className="text-[11px] text-muted whitespace-nowrap">
+          {accounts.length} mailbox{accounts.length === 1 ? '' : 'es'} · {accessData.domains.length} domain{accessData.domains.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
       <div className="surface border border-app rounded-2xl mb-3 px-3 py-2.5">
         <div className="flex gap-5 overflow-x-auto pb-1">
           {grouped.map(([brand, items]) => (
@@ -334,6 +372,57 @@ export default function Webmail() {
           {grouped.length === 0 && <p className="text-xs text-muted py-2">No accounts available.</p>}
         </div>
       </div>
+
+      <details className="surface border border-app rounded-2xl mb-3 px-3 py-2.5 group">
+        <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <Globe2 size={15} className="text-indigo-500" /> Domains &amp; assigned users
+          </span>
+          <span className="text-[11px] text-muted flex items-center gap-2">
+            {accessData.scope === 'all' && <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-semibold">Super admin: full access</span>}
+            {accessData.domains.length} domain{accessData.domains.length === 1 ? '' : 's'}
+            <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="mt-3 overflow-x-auto">
+          {accessData.domains.length === 0 ? (
+            <p className="text-xs text-muted py-2">No domains visible for your role.</p>
+          ) : (
+            <table className="w-full text-xs min-w-[620px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-app">
+                  <th className="py-2 pr-3">Domain</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Mailboxes</th>
+                  <th className="py-2 pr-3">Lead</th>
+                  <th className="py-2">Assigned users</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accessData.domains.map(d => (
+                  <tr key={d.id} className="border-b border-app/60 last:border-0">
+                    <td className="py-2 pr-3 font-semibold">{d.name}</td>
+                    <td className="py-2 pr-3"><span className={`px-2 py-0.5 rounded-full ${d.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>{d.status}</span></td>
+                    <td className="py-2 pr-3">{d.accounts}</td>
+                    <td className="py-2 pr-3">{d.lead?.name || '—'}</td>
+                    <td className="py-2">
+                      {d.users.length === 0 ? <span className="text-muted">none</span> : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {d.users.map(u => (
+                            <span key={u.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full surface-2 border border-app">
+                              <Users size={10} className="text-indigo-500" /> {u.name} <span className="text-muted">({u.role})</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </details>
 
       <form ref={formRef} method="post" action="/webmail/portal-sso.php" target="snappyFrame" className="hidden">
         <input type="hidden" name="t" value="" />
