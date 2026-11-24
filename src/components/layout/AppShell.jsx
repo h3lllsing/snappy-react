@@ -113,7 +113,7 @@ export function AppShell({ children }) {
             <Avatar name={user?.name} size="sm" />
             {!collapsed && <div className="min-w-0 flex-1"><div className="text-xs font-semibold truncate">{user?.name}</div><Badge role={user?.role} className="mt-0.5">{user?.role}</Badge></div>}
           </NavLink>
-          <button onClick={logout} className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-muted hover:text-red-500 hover:bg-red-500/5 ${collapsed ? 'justify-center' : ''}`}>
+          <button onClick={async () => { await logout(); navigate('/login', { replace: true }) }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-muted hover:text-red-500 hover:bg-red-500/5 ${collapsed ? 'justify-center' : ''}`}>
             <LogOut size={17} />{!collapsed && 'Logout'}
           </button>
         </div>

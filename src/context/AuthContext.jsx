@@ -3,6 +3,7 @@ import api from '../lib/api'
 import { connectEcho, disconnectEcho, startDemoStream } from '../lib/echo'
 import { useToast } from '../components/ui'
 import { useLive } from './LiveContext'
+import { setBearerToken } from '../lib/http'
 
 const AuthCtx = createContext(null)
 
@@ -68,7 +69,16 @@ export function AuthProvider({ children }) {
     setUser(res.user)
     return res
   }
-  const logout = () => { setUser(null); disconnectEcho() }
+  const logout = async () => {
+    try {
+      await api.logout()
+    } catch {
+      // even if the server call fails, clear the local session
+    }
+    setBearerToken(null)
+    setUser(null)
+    disconnectEcho()
+  }
 
   return <AuthCtx.Provider value={{ user, loading, login, logout, setUser }}>{children}</AuthCtx.Provider>
 }

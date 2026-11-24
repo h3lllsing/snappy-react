@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, KeyRound, Lock, Save, ShieldCheck } from 'lucide-react'
 import { Alert, Button, Card, CardBody, CardHeader, Field, Input, PageHeader, useToast } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
-import { setBearerToken } from '../lib/http'
 import api from '../lib/api'
 
 export default function ChangePassword() {
@@ -51,8 +50,7 @@ export default function ChangePassword() {
         password_confirmation: form.password_confirmation,
       })
       toast('Your password has been changed. Please sign in again.', 'success', { title: 'Password updated' })
-      logout()
-      setBearerToken(null)
+      await logout()
       navigate('/login?password_changed=1', { replace: true })
     } catch (err) {
       const message = err?.message || 'Unable to change password. Please try again.'
