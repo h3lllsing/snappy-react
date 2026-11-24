@@ -32,6 +32,7 @@ const NAV = [
     { to: '/ops', label: 'Live Operations', icon: Activity, roles: ['super-admin','admin'] },
     { to: '/imap-status', label: 'IMAP Status', icon: Server, roles: ['super-admin'] },
     { to: '/activity-logs', label: 'Activity Logs', icon: Activity, roles: ['super-admin'] },
+    { to: '/mail-activity', label: 'Mail Activity', icon: Activity, roles: ['super-admin','admin'] },
     { to: '/login-audits', label: 'Login History', icon: ShieldCheck, roles: ['super-admin'] },
     { to: '/queue-monitor', label: 'Queue Monitor', icon: Zap, roles: ['super-admin'] },
   ]},

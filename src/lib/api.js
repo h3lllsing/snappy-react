@@ -261,6 +261,7 @@ export const api = {
   opsIssue: async (id) => { if (USE_API) return get(`/ops/issues/${id}/timeline`); await delay(); return { id } },
   opsIssueTimeline: async (id) => { if (USE_API) return get(`/ops/issues/${id}/timeline`); await delay(); return { timeline: [] } },
   opsStream: async (after) => { if (USE_API) return get('/ops/stream' + (after ? '?after=' + after : '')); return list(async () => { await delay(); return [] }) },
+  mailActivity: async (params) => { if (USE_API) return list(async () => get('/webmail/activity-log' + (params && Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : ''))); return [] },
   retryOpsJob: async (id) => { await delay(); return { id } },
   cancelOpsJob: async (id) => { await delay(); return { id } },
   acknowledgeIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/ack`, payload); await delay(); return { id, ...payload } },

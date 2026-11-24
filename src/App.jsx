@@ -22,6 +22,7 @@ import Notifications from './pages/Notifications'
 import Search from './pages/Search'
 import Webmail from './pages/Webmail'
 import ActivityLogs from './pages/ActivityLogs'
+import MailActivity from './pages/MailActivity'
 import LoginAudits from './pages/LoginAudits'
 import QueueMonitor from './pages/QueueMonitor'
 import ImapStatus from './pages/ImapStatus'
@@ -75,6 +76,7 @@ export default function App() {
       <Route path="/webmail" element={<Protected><Webmail /></Protected>} />
       <Route path="/webmail/:id" element={<Protected><Webmail /></Protected>} />
       <Route path="/activity-logs" element={<Protected roles={['super-admin']}><ActivityLogs /></Protected>} />
+      <Route path="/mail-activity" element={<Protected roles={['super-admin', 'admin']}><MailActivity /></Protected>} />
       <Route path="/login-audits" element={<Protected roles={['super-admin']}><LoginAudits /></Protected>} />
       <Route path="/queue-monitor" element={<Protected roles={['super-admin']}><QueueMonitor /></Protected>} />
       <Route path="/imap-status" element={<Protected roles={['super-admin']}><ImapStatus /></Protected>} />
