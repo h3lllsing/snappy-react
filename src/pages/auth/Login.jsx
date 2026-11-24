@@ -63,7 +63,7 @@ export default function Login() {
             <Field label="Email address" required>
               <div className="relative">
                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <Input type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" />
+                <Input type="email" autoComplete="username" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" />
               </div>
             </Field>
 
