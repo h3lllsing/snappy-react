@@ -13,7 +13,8 @@ import api from '../lib/api'
 
 const emptyForm = {
   email: '', password: '', brand_id: '', domain_id: '', status: 'active',
-  sync_enabled: true, imap_host: '', imap_port: '993', smtp_host: '', smtp_port: '587',
+  sync_enabled: true, imap_host: '', imap_port: '993', imap_encryption: 'ssl',
+  smtp_host: '', smtp_port: '587', smtp_encryption: 'tls',
 }
 
 function ChainNode({ icon: Icon, label, value, tone = 'indigo' }) {
@@ -33,6 +34,7 @@ export default function Accounts() {
   const toast = useToast()
   const [accounts, setAccounts] = useState([])
   const [brands, setBrands] = useState([])
+  const [domains, setDomains] = useState([])
   const [users, setUsers] = useState([])
   const [tab, setTab] = useState('active')
   const [query, setQuery] = useState('')
@@ -49,7 +51,7 @@ export default function Accounts() {
   useEffect(() => {
     let alive = true
     Promise.all([api.accounts(), api.brands(), api.users(), api.domains()])
-      .then(([a, b, u]) => { if (alive) { setAccounts(a); setBrands(b); setUsers(u) } })
+      .then(([a, b, u, d]) => { if (alive) { setAccounts(a); setBrands(b); setUsers(u); setDomains(d) } })
       .catch(() => { if (alive) toast('Could not load accounts.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
@@ -101,13 +103,20 @@ export default function Accounts() {
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
   const userName = id => users.find(u => u.id === id)?.name || `User #${id}`
 
-  const onBrandChange = e => {
+  const onDomainChange = e => {
     const id = e.target.value
-    const brand = brands.find(b => String(b.id) === String(id))
+    const domain = domains.find(d => String(d.id) === String(id))
+    const brand = brands.find(b => b.domain === domain?.name)
     setForm(f => ({
-      ...f, brand_id: id, domain_id: id,
-      imap_host: brand ? `mail.${brand.domain}` : f.imap_host,
-      smtp_host: brand ? `mail.${brand.domain}` : f.smtp_host,
+      ...f,
+      domain_id: id,
+      brand_id: brand ? String(brand.id) : '',
+      imap_host: domain?.imap_host || f.imap_host,
+      imap_port: String(domain?.imap_port || f.imap_port),
+      imap_encryption: domain?.imap_encryption || f.imap_encryption,
+      smtp_host: domain?.smtp_host || f.smtp_host,
+      smtp_port: String(domain?.smtp_port || f.smtp_port),
+      smtp_encryption: domain?.smtp_encryption || f.smtp_encryption,
     }))
   }
 
@@ -115,9 +124,14 @@ export default function Accounts() {
   const openEdit = a => {
     setEditing(a)
     setForm({
-      email: a.email, password: '', brand_id: String(a.brand_id), domain_id: String(a.domain_id),
+      email: a.email, password: '',
+      brand_id: a.brand_id ? String(a.brand_id) : '',
+      domain_id: a.domain_id ? String(a.domain_id) : '',
       status: a.status, sync_enabled: a.sync_enabled,
-      imap_host: a.imap_host || '', imap_port: '993', smtp_host: a.smtp_host || '', smtp_port: '587',
+      imap_host: a.imap_host || '', imap_port: String(a.imap_port || '993'),
+      imap_encryption: a.imap_encryption || 'ssl',
+      smtp_host: a.smtp_host || '', smtp_port: String(a.smtp_port || '587'),
+      smtp_encryption: a.smtp_encryption || 'tls',
     })
     setPreview(null)
     setAddOpen(true)
@@ -125,31 +139,34 @@ export default function Accounts() {
 
   const save = async e => {
     e.preventDefault()
-    if (!form.email.trim() || !form.brand_id) {
-      toast('Email and domain/brand are required.', 'error', { title: 'Missing fields' }); return
+    if (!form.email.trim() || !form.domain_id) {
+      toast('Email and domain are required.', 'error', { title: 'Missing fields' }); return
     }
-    const brand = brands.find(b => String(b.id) === String(form.brand_id))
+    if (!editing && !form.password) {
+      toast('Password is required for a new mailbox.', 'error', { title: 'Missing password' }); return
+    }
+    const domain = domains.find(d => String(d.id) === String(form.domain_id))
     try {
+      const payload = {
+        email: form.email.trim(),
+        domain_id: Number(form.domain_id),
+        brand_id: form.brand_id ? Number(form.brand_id) : null,
+        status: form.status, sync_enabled: form.sync_enabled,
+        imap_host: form.imap_host.trim(), imap_port: Number(form.imap_port), imap_encryption: form.imap_encryption,
+        smtp_host: form.smtp_host.trim(), smtp_port: Number(form.smtp_port), smtp_encryption: form.smtp_encryption,
+      }
+      if (form.password) payload.password = form.password
       if (editing) {
-        const data = {
-          email: form.email.trim(), brand: brand?.domain || editing.brand,
-          brand_id: Number(form.brand_id), domain_id: Number(form.domain_id),
-          status: form.status, sync_enabled: form.sync_enabled,
-          imap_host: form.imap_host.trim(), smtp_host: form.smtp_host.trim(),
-        }
-        const updated = await api.updateAccount(editing.id, data, editing.updated_at)
-        setAccounts(prev => prev.map(a => a.id === editing.id ? { ...a, ...data, ...(updated || {}) } : a))
+        const updated = await api.updateAccount(editing.id, payload, editing.updated_at)
+        setAccounts(prev => prev.map(a => a.id === editing.id ? { ...a, ...payload, brand: domain?.name || a.brand, ...(updated || {}) } : a))
         toast(`${form.email.trim()} updated.`, 'success', { title: 'Account saved' })
       } else {
-        const data = {
-          email: form.email.trim(), brand: brand?.domain || '',
-          domain_id: Number(form.domain_id), brand_id: Number(form.brand_id),
-          status: form.status, sync: form.sync_enabled ? 'idle' : 'paused',
-          sync_enabled: form.sync_enabled, unread: 0, last_sync: 'never',
-          imap_host: form.imap_host.trim(), smtp_host: form.smtp_host.trim(), assigned: [],
-        }
-        const created = await api.createAccount(data)
-        setAccounts(prev => [...prev, created || { id: Date.now(), ...data }])
+        const created = await api.createAccount(payload)
+        setAccounts(prev => [...prev, {
+          ...created,
+          brand: domain?.name || '', brand_id: payload.brand_id,
+          assigned: [], unread: 0, last_sync: 'never', sync: payload.sync_enabled ? 'idle' : 'paused',
+        }])
         toast(`${form.email.trim()} was added.`, 'success', { title: 'Account created' })
       }
       setAddOpen(false); setEditing(null); setForm(emptyForm); setPreview(null)
@@ -192,7 +209,7 @@ export default function Accounts() {
     toast(`Exported ${filtered.length} accounts.`, 'success', { title: 'CSV ready' })
   }
 
-  const selectedBrand = brands.find(b => String(b.id) === String(form.brand_id))
+  const selectedDomain = domains.find(d => String(d.id) === String(form.domain_id))
   const previewMailboxes = preview?.brand ? accounts.filter(a => a.brand === preview.brand) : []
 
   return (
@@ -327,10 +344,10 @@ export default function Accounts() {
       >
         <form onSubmit={save} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Domain / Brand" required hint="Auto-assign follows this brand's lead and team.">
-              <Select value={form.brand_id} onChange={onBrandChange}>
+            <Field label="Domain" required hint="Mail settings are taken from this domain. Auto-assign follows its brand lead.">
+              <Select value={form.domain_id} onChange={onDomainChange}>
                 <option value="">Select a domain…</option>
-                {brands.map(b => <option key={b.id} value={b.id}>{b.domain} · {b.name}</option>)}
+                {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </Select>
             </Field>
             <Field label="Status"><Select value={form.status} onChange={set('status')}>
@@ -339,7 +356,7 @@ export default function Accounts() {
             </Select></Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Email address" required><Input type="email" value={form.email} onChange={set('email')} placeholder={selectedBrand ? `sales@${selectedBrand.domain}` : 'mailbox@domain.com'} /></Field>
+            <Field label="Email address" required><Input type="email" value={form.email} onChange={set('email')} placeholder={selectedDomain ? `sales@${selectedDomain.name}` : 'mailbox@domain.com'} /></Field>
             <Field label="Password" required={!editing}><Input type="password" value={form.password} onChange={set('password')} placeholder="••••••••" /></Field>
           </div>
 
@@ -355,6 +372,7 @@ export default function Accounts() {
                     <Field label="Host"><Input value={form.imap_host} onChange={set('imap_host')} placeholder="mail.domain.com" /></Field>
                     <Field label="Port"><Input type="number" value={form.imap_port} onChange={set('imap_port')} /></Field>
                   </div>
+                  <Field label="Encryption"><Select value={form.imap_encryption} onChange={set('imap_encryption')}><option value="ssl">SSL</option><option value="tls">TLS</option><option value="none">None</option></Select></Field>
                 </div>
                 <div className="rounded-lg border border-app p-3 space-y-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-purple-500">SMTP</p>
@@ -362,6 +380,7 @@ export default function Accounts() {
                     <Field label="Host"><Input value={form.smtp_host} onChange={set('smtp_host')} placeholder="mail.domain.com" /></Field>
                     <Field label="Port"><Input type="number" value={form.smtp_port} onChange={set('smtp_port')} /></Field>
                   </div>
+                  <Field label="Encryption"><Select value={form.smtp_encryption} onChange={set('smtp_encryption')}><option value="tls">TLS</option><option value="ssl">SSL</option><option value="none">None</option></Select></Field>
                 </div>
               </div>
               <Checkbox

@@ -17,6 +17,26 @@ export function setBearerToken(token) {
   else delete http.defaults.headers.common.Authorization
 }
 
+export function reportClientError({ message, stack = '', url = '', severity = 'warning' }) {
+  if (import.meta.env.VITE_USE_API !== 'true' || typeof fetch === 'undefined') return
+  try {
+    const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+    if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`
+    fetch(`${BASE_URL}/ops/errors`, {
+      method: 'POST',
+      headers,
+      credentials: AUTH_MODE === 'cookie' ? 'include' : 'omit',
+      body: JSON.stringify({
+        message: String(message || 'Unknown frontend error').slice(0, 2000),
+        stack: String(stack || '').slice(0, 8000),
+        url: String(url || '').slice(0, 2000),
+        severity,
+      }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch { /* reporting must never break the app */ }
+}
+
 export class ApiError extends Error {
   constructor(status, message, errors = null, retryAfter = null) {
     super(message)
@@ -35,6 +55,14 @@ http.interceptors.response.use(
     const message = data.message || error.message || 'Request failed'
     const retryAfter = error.response?.headers?.['retry-after'] || null
 
+    if (status >= 500 || status === 405 || status === 404) {
+      reportClientError({
+        message: `HTTP ${status}: ${message}`,
+        stack: error.config?.url || '',
+        url: typeof window !== 'undefined' ? window.location.href : '',
+        severity: status >= 500 ? 'critical' : 'warning',
+      })
+    }
     if (status === 401) {
       setBearerToken(null)
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
