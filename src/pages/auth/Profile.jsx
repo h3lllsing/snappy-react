@@ -34,8 +34,8 @@ export default function Profile() {
         toast('Current password is required to change your password.', 'error', { title: 'Current password needed' })
         return
       }
-      if (form.password.length < 8) {
-        toast('New password must be at least 8 characters.', 'error', { title: 'Password too short' })
+      if (form.password.length < 12) {
+        toast('New password must be at least 12 characters.', 'error', { title: 'Password too short' })
         return
       }
       if (form.password !== form.password_confirmation) {
@@ -44,14 +44,24 @@ export default function Profile() {
       }
     }
     setLoading(true)
-    await new Promise(r => setTimeout(r, 400))
-    await api.updateUser(user.id, { name: form.name.trim(), email: form.email.trim() })
-    if (changingPassword) await api.changePassword({ current_password: form.current_password, password: form.password })
-    setUser(u => ({ ...u, name: form.name.trim(), email: form.email.trim() }))
-    setForm(f => ({ ...f, current_password: '', password: '', password_confirmation: '' }))
-    setLoading(false)
-    toast('Your profile has been updated.', 'success', { title: 'Changes saved' })
-    if (changingPassword) toast('Password updated (local reference)', 'success', { title: 'Password changed' })
+    try {
+      await api.updateUser(user.id, { name: form.name.trim(), email: form.email.trim() })
+      if (changingPassword) {
+        await api.changePassword({
+          current_password: form.current_password,
+          password: form.password,
+          password_confirmation: form.password_confirmation,
+        })
+      }
+      setUser(u => ({ ...u, name: form.name.trim(), email: form.email.trim() }))
+      setForm(f => ({ ...f, current_password: '', password: '', password_confirmation: '' }))
+      toast('Your profile has been updated.', 'success', { title: 'Changes saved' })
+      if (changingPassword) toast('Password changed successfully.', 'success', { title: 'Password updated' })
+    } catch (err) {
+      toast(err?.message || 'Could not save changes.', 'error', { title: 'Save failed' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
