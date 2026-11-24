@@ -3,7 +3,13 @@ import axios from 'axios'
 const BASE_URL = import.meta.env.VITE_API_URL || '/api'
 const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'cookie'
 
-let bearerToken = null
+// The SPA performs full page navigations (e.g. to /change-password), so the
+// bearer token must survive a reload. sessionStorage keeps it for the tab
+// session only and is cleared when the browser/tab closes.
+const TOKEN_KEY = 'portal_session_token'
+let bearerToken = typeof sessionStorage !== 'undefined'
+  ? sessionStorage.getItem(TOKEN_KEY)
+  : null
 
 export const http = axios.create({
   baseURL: BASE_URL,
@@ -11,10 +17,19 @@ export const http = axios.create({
   headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
 })
 
+if (bearerToken) {
+  http.defaults.headers.common.Authorization = `Bearer ${bearerToken}`
+}
+
 export function setBearerToken(token) {
   bearerToken = token
-  if (token) http.defaults.headers.common.Authorization = `Bearer ${token}`
-  else delete http.defaults.headers.common.Authorization
+  if (token) {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(TOKEN_KEY, token)
+    http.defaults.headers.common.Authorization = `Bearer ${token}`
+  } else {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(TOKEN_KEY)
+    delete http.defaults.headers.common.Authorization
+  }
 }
 
 export function reportClientError({ message, stack = '', url = '', severity = 'warning' }) {
