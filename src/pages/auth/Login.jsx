@@ -27,7 +27,11 @@ export default function Login() {
       const res = await login({ email, password, remember })
       localStorage.setItem('remember_me', remember ? 'true' : 'false')
       toast(`Welcome back, ${res.user.name.split(' ')[0]}!`, 'success', { title: 'Signed in successfully' })
-      navigate('/dashboard')
+      if (res.must_change_password) {
+        navigate('/change-password', { replace: true })
+      } else {
+        navigate('/dashboard')
+      }
     } catch {
       setError('Unable to sign in. Please try again.')
     } finally {
@@ -83,13 +87,15 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 flex gap-2.5">
-            <ShieldCheck size={17} className="text-indigo-500 shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <p className="font-semibold">Demo mode</p>
-              <p className="text-muted mt-0.5">Any email and password will work. Try <span className="text-[var(--text)] font-medium">admin@alphaspace.io</span> / <span className="text-[var(--text)] font-medium">password</span>.</p>
+          {import.meta.env.VITE_USE_API !== 'true' && (
+            <div className="mt-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 flex gap-2.5">
+              <ShieldCheck size={17} className="text-indigo-500 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-semibold">Demo mode</p>
+                <p className="text-muted mt-0.5">Any email and password will work. Try <span className="text-[var(--text)] font-medium">admin@alphaspace.io</span> / <span className="text-[var(--text)] font-medium">password</span>.</p>
+              </div>
             </div>
-          </div>
+          )}
 
           <p className="text-center text-xs text-muted mt-6">
             Don't have an account? <Link to="/register" className="text-indigo-500 font-semibold hover:underline">Create one</Link>
