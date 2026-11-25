@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bell, ChevronDown, Globe2, Mail, Maximize2, Minimize2, Server, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, ChevronDown, Globe2, Mail, Maximize2, Minimize2, Search, Server, Users, X } from 'lucide-react'
 import { useToast } from '../components/ui'
 import { useLive } from '../context/LiveContext'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
+
+const accountDomain = acc => (acc.email || '').split('@')[1] || ''
+
+function UnreadBadge({ count }) {
+  if (!count) return null
+  return (
+    <span className="min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+      {count}
+    </span>
+  )
+}
 
 export default function Webmail() {
   const { id } = useParams()
@@ -19,6 +30,8 @@ export default function Webmail() {
   const [unavailable, setUnavailable] = useState(false)
   const [ssoError, setSsoError] = useState(null)
   const [fullscreen, setFullscreen] = useState(false)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [switcherQuery, setSwitcherQuery] = useState('')
 
   useEffect(() => {
     if (!fullscreen) return
@@ -30,6 +43,8 @@ export default function Webmail() {
   const formRef = useRef(null)
   const ssoDone = useRef(null)
   const selectionSeq = useRef(0)
+  const switcherRef = useRef(null)
+  const searchRef = useRef(null)
 
   useEffect(() => {
     frameRef.current?.contentWindow?.postMessage(
@@ -113,6 +128,35 @@ export default function Webmail() {
     })
     return Array.from(map.entries())
   }, [accounts])
+
+  const filteredGrouped = useMemo(() => {
+    const q = switcherQuery.trim().toLowerCase()
+    if (!q) return grouped
+    return grouped
+      .map(([brand, items]) => [brand, items.filter(a =>
+        (a.email || '').toLowerCase().includes(q) ||
+        String(brand).toLowerCase().includes(q) ||
+        accountDomain(a).toLowerCase().includes(q),
+      )])
+      .filter(([, items]) => items.length > 0)
+  }, [grouped, switcherQuery])
+
+  useEffect(() => {
+    if (!switcherOpen) return
+    searchRef.current?.focus()
+    const onPointerDown = e => {
+      if (!switcherRef.current?.contains(e.target)) setSwitcherOpen(false)
+    }
+    const onKeyDown = e => {
+      if (e.key === 'Escape') setSwitcherOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [switcherOpen])
 
   // Portal -> SnappyMail secure SSO: request a single-use token from Laravel,
   // then POST it to the bridge which redirects the iframe into an authenticated session.
@@ -204,28 +248,68 @@ export default function Webmail() {
       {!unavailable && (
       <>
       <div className="surface border border-app rounded-2xl mb-3 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Mail size={15} className="text-indigo-500 shrink-0" />
-          <select
+        <div ref={switcherRef} className="relative min-w-0 flex-1">
+          <button
+            type="button"
             aria-label="Switch email account"
-            value={account?.id ?? ''}
-            onChange={e => {
-              const acc = accounts.find(a => String(a.id) === e.target.value)
-              if (acc) selectAccount(acc)
-            }}
-            className="w-full sm:max-w-md rounded-xl border border-app surface-2 px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            aria-haspopup="listbox"
+            aria-expanded={switcherOpen}
+            onClick={() => setSwitcherOpen(o => !o)}
+            className="w-full sm:max-w-md flex items-center justify-between gap-2 rounded-xl border border-app surface-2 px-3 py-2 text-sm text-[var(--text)] hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
           >
-            {grouped.map(([brand, items]) => (
-              <optgroup key={brand} label={brand}>
-                {items.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.email}{unreadFor(a) ? ` (${unreadFor(a)} unread)` : ''}
-                  </option>
+            <span className="flex items-center gap-2 min-w-0 truncate">
+              <Mail size={15} className="text-indigo-500 shrink-0" />
+              <span className="truncate">{account?.email || 'Select mailbox'}</span>
+              <UnreadBadge count={account ? unreadFor(account) : 0} />
+            </span>
+            <ChevronDown size={14} className={`text-muted shrink-0 transition-transform ${switcherOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {switcherOpen && (
+            <div className="absolute z-30 left-0 right-0 sm:w-[26rem] mt-1.5 rounded-xl border border-app surface shadow-xl shadow-black/20 overflow-hidden">
+              <div className="p-2 border-b border-app">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    value={switcherQuery}
+                    onChange={e => setSwitcherQuery(e.target.value)}
+                    placeholder="Search email or domain…"
+                    aria-label="Search email or domain"
+                    className="w-full rounded-lg border border-app surface-2 pl-8 pr-3 py-2 text-sm text-[var(--text)] placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+              </div>
+              <div role="listbox" aria-label="Mailboxes" className="max-h-72 overflow-y-auto p-1.5">
+                {filteredGrouped.length === 0 ? (
+                  <p className="text-xs text-muted px-2 py-3 text-center">No matching mailbox</p>
+                ) : filteredGrouped.map(([brand, items]) => (
+                  <div key={brand} role="group" aria-label={brand} className="mb-1 last:mb-0">
+                    <p className="text-[9px] uppercase tracking-widest text-muted font-semibold px-2 py-1">{brand}</p>
+                    {items.map(a => {
+                      const selected = account?.id === a.id
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => { selectAccount(a); setSwitcherOpen(false) }}
+                          className={`w-full flex items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-xs transition-colors ${selected ? 'bg-indigo-500/10 text-indigo-500' : 'text-[var(--text)] hover:bg-indigo-500/10'}`}
+                        >
+                          <span className="flex items-center gap-2 min-w-0 truncate">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            <span className="truncate">{a.email}</span>
+                          </span>
+                          <UnreadBadge count={unreadFor(a)} />
+                        </button>
+                      )
+                    })}
+                  </div>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-          <ChevronDown size={14} className="text-muted shrink-0 -ml-6 pointer-events-none" />
+              </div>
+            </div>
+          )}
         </div>
         <span className="text-[11px] text-muted whitespace-nowrap">
           {accounts.length} mailbox{accounts.length === 1 ? '' : 'es'} · {accessData.domains.length} domain{accessData.domains.length === 1 ? '' : 's'}
@@ -233,8 +317,22 @@ export default function Webmail() {
       </div>
 
       <div className="surface border border-app rounded-2xl mb-3 px-3 py-2.5">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="relative w-full sm:max-w-xs">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <input
+              type="text"
+              value={switcherQuery}
+              onChange={e => setSwitcherQuery(e.target.value)}
+              placeholder="Search email or domain…"
+              aria-label="Search mailboxes"
+              className="w-full rounded-lg border border-app surface-2 pl-8 pr-3 py-1.5 text-xs text-[var(--text)] placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            />
+          </div>
+          <span className="text-[11px] text-muted whitespace-nowrap">Quick switch</span>
+        </div>
         <div className="flex gap-5 overflow-x-auto pb-1">
-          {grouped.map(([brand, items]) => (
+          {filteredGrouped.map(([brand, items]) => (
             <div key={brand} className="shrink-0">
               <p className="text-[9px] uppercase tracking-widest text-muted font-semibold mb-1.5 px-1">{brand}</p>
               <div className="flex gap-1.5">
@@ -253,7 +351,9 @@ export default function Webmail() {
               </div>
             </div>
           ))}
-          {grouped.length === 0 && <p className="text-xs text-muted py-2">No accounts available.</p>}
+          {grouped.length === 0
+            ? <p className="text-xs text-muted py-2">No accounts available.</p>
+            : filteredGrouped.length === 0 && <p className="text-xs text-muted py-2">No matching mailbox</p>}
         </div>
       </div>
       </>
