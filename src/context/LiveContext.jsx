@@ -4,17 +4,22 @@ import { navigateTo } from '../lib/navigation'
 import api from '../lib/api'
 
 const LiveCtx = createContext(null)
+const USE_API = import.meta.env.VITE_USE_API === 'true'
 
 export function LiveProvider({ children }) {
-  const [mails, setMails] = useState(mock.mails)
-  const [notifications, setNotifications] = useState(mock.notifications)
+  // In real API mode never seed the UI with demo data: an empty DB must render
+  // empty, otherwise stale mock mails/notifications keep showing forever.
+  const [mails, setMails] = useState(USE_API ? [] : mock.mails)
+  const [notifications, setNotifications] = useState(USE_API ? [] : mock.notifications)
   const [pulse, setPulse] = useState(0)
 
   useEffect(() => {
-    if (import.meta.env.VITE_USE_API !== 'true') return
+    if (!USE_API) return
     Promise.all([api.mails(), api.notifications()]).then(([m, n]) => {
-      if (m?.length) setMails(m)
-      if (n?.length) setNotifications(n)
+      // Always replace, including with empty arrays — otherwise a fresh DB
+      // leaves the initial demo rows visible.
+      setMails(Array.isArray(m) ? m : [])
+      setNotifications(Array.isArray(n) ? n : [])
     }).catch(() => {})
   }, [])
 

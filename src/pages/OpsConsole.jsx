@@ -38,12 +38,20 @@ const cursorOf = (payload) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+const USE_API = import.meta.env.VITE_USE_API === 'true'
+const EMPTY_SUMMARY = {
+  accounts: 0, online: 0, syncing: 0, paused: 0, open_issues: 0,
+  received_today: 0, sent_today: 0, pushed_today: 0, queue_depth: 0,
+  failed_jobs: 0, maintenance: false,
+}
+
 export default function OpsConsole() {
   const toast = useToast()
-  const [summary, setSummary] = useState(DEMO_SUMMARY)
-  const [runs, setRuns] = useState(DEMO_RUNS)
-  const [issues, setIssues] = useState(DEMO_ISSUES)
-  const [mail, setMail] = useState(DEMO_MAIL)
+  // API mode starts empty; demo fixtures are only for the no-backend mock mode.
+  const [summary, setSummary] = useState(USE_API ? EMPTY_SUMMARY : DEMO_SUMMARY)
+  const [runs, setRuns] = useState(USE_API ? [] : DEMO_RUNS)
+  const [issues, setIssues] = useState(USE_API ? [] : DEMO_ISSUES)
+  const [mail, setMail] = useState(USE_API ? [] : DEMO_MAIL)
   const [direction, setDirection] = useState('in')
   const [loading, setLoading] = useState(false)
   const [timeline, setTimeline] = useState(null)
