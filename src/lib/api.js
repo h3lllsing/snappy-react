@@ -165,7 +165,7 @@ export const api = {
   },
   assignAccount: async (accountId, userId) => {
     if (USE_API) {
-      const { data: res } = await http.post(`/email-accounts/${accountId}/assign`, { user_id: userId })
+      const { data: res } = await http.patch(`/email-accounts/${accountId}/assign/${userId}`, { can_send: true, can_receive: true })
       return res
     }
     await delay()
