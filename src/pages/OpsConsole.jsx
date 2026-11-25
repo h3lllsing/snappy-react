@@ -32,6 +32,7 @@ export default function OpsConsole() {
   const [direction, setDirection] = useState('in')
   const [loading, setLoading] = useState(false)
   const [timeline, setTimeline] = useState(null)
+  const [cursor, setCursor] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -51,12 +52,19 @@ export default function OpsConsole() {
   useEffect(() => {
     const id = setInterval(async () => {
       try {
-        const stream = await api.opsStream()
-        if (stream?.events?.length) load()
+        const stream = await api.opsStream(cursor)
+        const ids = (stream?.events || []).map((e) => e?.id).filter((v) => typeof v === 'number')
+        const maxId = ids.length ? Math.max(...ids) : cursor
+        if (maxId > cursor) {
+          setCursor(stream?.cursor ?? maxId)
+          load()
+        } else if (typeof stream?.cursor === 'number' && stream.cursor > cursor) {
+          setCursor(stream.cursor)
+        }
       } catch { /* poll fallback */ }
     }, 30000)
     return () => clearInterval(id)
-  }, [load])
+  }, [cursor, load])
 
   const act = async (id, action, label) => {
     const fn = {

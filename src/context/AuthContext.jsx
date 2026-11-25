@@ -46,9 +46,9 @@ export function AuthProvider({ children }) {
         const items = res.notifications || []
         if (cursor !== null && items.length) {
           items.forEach(n => onMail({
-            mail_id: Number(n.id) || Date.now(),
+            mail_id: Number(n.data?.mail_id ?? n.mail_id ?? n.id) || Date.now(),
             account: (n.title || '').match(/in\s+([^\s]+)/)?.[1] || 'mailbox',
-            account_id: 1,
+            account_id: n.data?.account_id ?? n.account_id,
             brand: (n.title || '').match(/in\s+([^\s]+)/)?.[1]?.split('@')[1] || 'portal',
             from: n.detail || '',
             subject: n.title || 'New notification',
