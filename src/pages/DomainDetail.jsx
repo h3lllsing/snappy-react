@@ -87,7 +87,7 @@ export default function DomainDetail() {
         backTo={() => navigate('/domains')}
         actions={<>
           <Badge variant={domain.status} dot>{domain.status}</Badge>
-          <Button variant="secondary" onClick={() => toast('Settings refreshed from the mock transport.', 'info', { title: 'Refresh complete' })}><RefreshCw size={15} /> Refresh</Button>
+          <Button variant="secondary" onClick={() => toast('Settings refreshed from the backend.', 'info', { title: 'Refresh complete' })}><RefreshCw size={15} /> Refresh</Button>
           <Button onClick={() => { setTab('bulk'); document.getElementById('bulk-panel')?.scrollIntoView({ behavior: 'smooth' }) }}><Plus size={16} /> Bulk Add Accounts</Button>
         </>}
       />

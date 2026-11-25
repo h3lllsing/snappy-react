@@ -1,277 +1,115 @@
-// FE-only mock API. Every function mirrors the future Laravel /api endpoint.
-// When BE is ready: replace the body with axios calls, keep the signatures.
-import * as mock from '../data/mock'
+// Every method talks to the live Laravel API through the shared http client.
 import { http, unwrapList, setBearerToken } from './http'
 
-const USE_API = import.meta.env.VITE_USE_API === 'true'
-
-const delay = (ms = 120) => new Promise(r => setTimeout(r, ms))
 const list = async (fn) => unwrapList(await fn())
 const get = async (path) => (await http.get(path)).data
 const post = async (path, body) => (await http.post(path, body || {})).data
+const put = async (path, body) => (await http.put(path, body || {})).data
 const patch = async (path, body) => (await http.patch(path, body || {})).data
+const remove = async (path) => (await http.delete(path)).data
+const query = (params) => {
+  const search = new URLSearchParams(params || {}).toString()
+  return search ? `?${search}` : ''
+}
 
 export const api = {
-  me: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/user')
-      return data
-    }
-    await delay(); return mock.CURRENT_USER
-  },
+  me: async () => get('/user'),
   login: async ({ email, password }) => {
-    if (USE_API) {
-      const { data } = await http.post('/login', { email, password })
-      setBearerToken(data?.token)
-      return data
-    }
-    await delay(400); return { token: 'mock-token', user: mock.CURRENT_USER }
+    const data = await post('/login', { email, password })
+    setBearerToken(data?.token)
+    return data
   },
-
-  brands: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/brands')
-      return unwrapList(data)
-    }
-    return list(async () => { await delay(); return mock.brands })
-  },
-  teams: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/teams')
-      return unwrapList(data)
-    }
-    return list(async () => { await delay(); return mock.teams })
-  },
-  users: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/users')
-      return unwrapList(data)
-    }
-    return list(async () => { await delay(); return mock.users })
-  },
-  domains: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/domains')
-      return unwrapList(data)
-    }
-    return list(async () => { await delay(); return mock.domains })
-  },
-  accounts: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/email-accounts')
-      return unwrapList(data)
-    }
-    return list(async () => { await delay(); return mock.accounts })
-  },
-  mails: async (params) => { if (USE_API) return list(async () => get('/mails' + (params ? '?' + new URLSearchParams(params).toString() : ''))); return list(async () => { await delay(); return mock.mails }) },
-  notifications: async () => { if (USE_API) return list(async () => get('/notifications')); return list(async () => { await delay(); return mock.notifications }) },
-  activities: async () => { if (USE_API) return list(async () => get('/activity-logs')); return list(async () => { await delay(); return mock.activities }) },
-  loginAudits: async () => { if (USE_API) return list(async () => get('/login-audits')); return list(async () => { await delay(); return mock.loginAudits }) },
-  failedJobs: async () => { if (USE_API) return list(async () => get('/admin/jobs/failed')); return list(async () => { await delay(); return mock.failedJobs }) },
-  imapStatus: async () => { if (USE_API) return list(async () => get('/admin/imap-status')); return list(async () => { await delay(); return mock.imapStatus }) },
-  dashboard: async () => {
-    if (USE_API) {
-      const { data } = await http.get('/dashboard/stats')
-      return data
-    }
-    await delay(); return mock.dashboardStats
-  },
-
-  // Assignment rules (FE preview of BE auto-assign logic)
-  autoAssignPreview: async (account) => {
-    if (USE_API) {
-      const { data } = await http.post('/email-accounts/auto-assign-preview', account)
-      return data
-    }
-    await delay()
-    const brand = mock.brandById(account.brand_id)
-    if (!brand) return { lead: null, members: [], assigned: [] }
-    return {
-      brand: brand.domain,
-      lead: mock.leadById(brand.lead_id),
-      members: mock.teamMembers(brand.lead_id),
-      assigned: account.assigned || [],
-    }
-  },
-
-  // Mutations write into the shared in-memory store, so changes survive navigation
-  // until reload. Swap these bodies for axios calls when the BE is ready.
-  domainAccess: async () => { if (USE_API) return get('/domains/access'); await delay(); return { scope: 'all', domains: [] } },
-  discoverDomain: async (domain) => { if (USE_API) return post('/domains/discover', { domain }); await delay(); return { domain, imap_host: 'mail.' + domain, imap_port: 993, imap_encryption: 'ssl', smtp_host: 'mail.' + domain, smtp_port: 587, smtp_encryption: 'tls', source: 'mock-convention' } },
-  createDomain: async (data) => { if (USE_API) return post('/domains', data); await delay(); return { id: Date.now(), ...data } },
-  deleteDomain: async (id) => { if (USE_API) return (await http.delete(`/domains/${id}`)).data; await delay(); return { id } },
-  deleteAccount: async (id) => { if (USE_API) return (await http.delete(`/email-accounts/${id}`)).data; await delay(); return { id } },
-  createBrand: async (data) => {
-    if (USE_API) {
-      const { data: res } = await http.post('/brands', data)
-      return res
-    }
-    await delay()
-    const row = { id: Date.now(), accounts: 0, users: 0, ...data }
-    mock.brands.push(row)
-    return row
-  },
-  createTeam: async (data) => {
-    if (USE_API) {
-      const { data: res } = await http.post('/teams', data)
-      return res
-    }
-    await delay()
-    const row = { id: Date.now(), members: 0, accounts: 0, ...data }
-    mock.teams.push(row)
-    return row
-  },
-  createUser: async (data) => {
-    if (USE_API) {
-      const { data: res } = await http.post('/users', data)
-      return res
-    }
-    await delay()
-    const row = { id: Date.now(), last_login: 'never', accounts: 0, ...data }
-    mock.users.push(row)
-    return row
-  },
-  createAccount: async (data) => {
-    if (USE_API) {
-      const { data: res } = await http.post('/email-accounts', data)
-      return res
-    }
-    await delay()
-    const row = { id: Date.now(), assigned: [], sync: 'idle', unread: 0, last_sync: 'never', ...data }
-    mock.accounts.push(row)
-    return row
-  },
-  updateAccount: async (id, data, updatedAt) => {
-    if (USE_API) {
-      const payload = updatedAt ? { ...data, updated_at: updatedAt } : data
-      const { data: res } = await http.put(`/email-accounts/${id}`, payload)
-      return res
-    }
-    await delay()
-    const payload = updatedAt ? { ...data, updated_at: updatedAt } : data
-    const row = mock.accounts.find(a => a.id === Number(id))
-    if (row) Object.assign(row, payload)
-    return row || { id, ...payload }
-  },
-  deleteAccount: async (id) => {
-    if (USE_API) {
-      const { data: res } = await http.delete(`/email-accounts/${id}`)
-      return res
-    }
-    await delay()
-    const idx = mock.accounts.findIndex(a => a.id === Number(id))
-    if (idx >= 0) mock.accounts.splice(idx, 1)
-    return { id }
-  },
-  assignAccount: async (accountId, userId) => {
-    if (USE_API) {
-      const { data: res } = await http.patch(`/email-accounts/${accountId}/assign/${userId}`, { can_send: true, can_receive: true })
-      return res
-    }
-    await delay()
-    const row = mock.accounts.find(a => a.id === Number(accountId))
-    if (row && !row.assigned.includes(Number(userId))) row.assigned.push(Number(userId))
-    return { accountId, userId }
-  },
-  revokeAssignment: async (accountId, userId) => {
-    if (USE_API) {
-      const { data: res } = await http.delete(`/email-accounts/${accountId}/assign/${userId}`)
-      return res
-    }
-    await delay()
-    const row = mock.accounts.find(a => a.id === Number(accountId))
-    if (row) row.assigned = row.assigned.filter(id => id !== Number(userId))
-    return { accountId, userId }
-  },
-  syncAccount: async (id) => {
-    if (USE_API) {
-      const { data: res } = await http.post(`/email-accounts/${id}/sync`)
-      return res
-    }
-    await delay(600)
-    const row = mock.accounts.find(a => a.id === Number(id))
-    if (row) { row.sync = 'idle'; row.last_sync = 'just now' }
-    return { id, sync: 'idle' }
-  },
-  webmailToken: async (accountId) => {
-    if (USE_API) {
-      const { data: res } = await http.post(`/email-accounts/${accountId}/webmail-token`)
-      return res
-    }
-    await delay(); return { token: 'mock-' + accountId, expires_in: 300 }
-  },
-  markNotificationRead: async (id) => {
-    if (USE_API) return (await http.put(`/notifications/${id}/read`)).data
-    await delay()
-    const row = mock.notifications.find(n => n.id === id)
-    if (row) row.read = true
-    return { id }
-  },
-  markAllRead: async () => { if (USE_API) return (await http.put('/notifications/read-all')).data; await delay(); mock.notifications.forEach(n => { n.read = true }); return true },
-  retryJob: async (id) => {
-    if (USE_API) return post(`/admin/jobs/failed/${id}/retry`)
-    await delay()
-    const i = mock.failedJobs.findIndex(j => j.id === id)
-    if (i >= 0) mock.failedJobs.splice(i, 1)
-    return { id }
-  },
-
-  // Seams reserved by the execution plan. Mock-backed until their BE endpoints land,
-  // so later page edits are a one-line swap and no new seam is invented mid-phase.
   logout: async () => {
-    if (USE_API) {
-      await http.post('/logout')
+    try {
+      return await post('/logout')
+    } finally {
       setBearerToken(null)
-      return true
     }
-    await delay(); return true
   },
-  updateUser: async (id, data) => { await delay(); return { id, ...data } },
-  suspendUser: async (id, payload) => { await delay(); return { id, ...payload, status: 'suspended' } },
-  unsuspendUser: async (id) => { await delay(); return { id, status: 'active' } },
-  restoreUser: async (id) => { await delay(); return { id, status: 'active' } },
-  forceDeleteUser: async (id) => { await delay(); return { id } },
-  resetPassword: async (payload) => { await delay(); return { ...payload } },
-  changePassword: (data) => post('/change-password', data),
-  addTeamMember: async (teamId, userId) => { await delay(); return { teamId, userId } },
-  removeTeamMember: async (teamId, userId) => { await delay(); return { teamId, userId } },
-  updateAssignment: async (accountId, userId, payload) => { await delay(); return { accountId, userId, ...payload } },
-  setDomainSync: async (id, payload) => {
-    if (USE_API) {
-      const { data } = await http.patch(`/domains/${id}/sync`, payload)
-      return data
-    }
-    await delay(); return { id, ...payload }
-  },
-  setAccountSync: async (id, payload) => {
-    if (USE_API) {
-      const { data } = await http.patch(`/email-accounts/${id}/sync`, payload)
-      return data
-    }
-    await delay(); return { id, ...payload }
-  },
-  notificationsPoll: async (after = null) => { if (USE_API) return get('/notifications/poll' + (after ? '?after=' + after : '')); await delay(); return { notifications: [], cursor: after, imap_status: [] } },
 
-  opsSummary: async () => { if (USE_API) return get('/ops/summary'); await delay(); return {} },
-  opsSyncRuns: async () => { if (USE_API) return list(async () => get('/ops/sync-runs')); return list(async () => { await delay(); return [] }) },
-  opsSyncRun: async (id) => { await delay(); return { id } },
-  opsMail: async (params) => { if (USE_API) return list(async () => get('/ops/mail' + (params ? '?' + new URLSearchParams(params).toString() : ''))); return list(async () => { await delay(); return [] }) },
-  opsMailDetail: async (id) => { await delay(); return { id } },
-  opsIssues: async () => { if (USE_API) return list(async () => get('/ops/issues')); return list(async () => { await delay(); return [] }) },
-  opsIssue: async (id) => { if (USE_API) return get(`/ops/issues/${id}/timeline`); await delay(); return { id } },
-  opsIssueTimeline: async (id) => { if (USE_API) return get(`/ops/issues/${id}/timeline`); await delay(); return { timeline: [] } },
-  opsStream: async (after) => { if (USE_API) return get('/ops/stream' + (after ? '?after=' + after : '')); return list(async () => { await delay(); return [] }) },
-  mailActivity: async (params) => { if (USE_API) return list(async () => get('/webmail/activity-log' + (params && Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : ''))); return [] },
-  retryOpsJob: async (id) => { await delay(); return { id } },
-  cancelOpsJob: async (id) => { await delay(); return { id } },
-  acknowledgeIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/ack`, payload); await delay(); return { id, ...payload } },
-  resolveIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/resolve`, payload); await delay(); return { id, ...payload } },
-  assignIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/assign`, payload); await delay(); return { id, ...payload } },
-  snoozeIssue: async (id, payload) => { if (USE_API) return patch(`/ops/issues/${id}/snooze`, payload); await delay(); return { id, ...payload } },
-  startIssue: async (id) => { if (USE_API) return patch(`/ops/issues/${id}/start`); await delay(); return { id } },
-  closeIssue: async (id) => { if (USE_API) return patch(`/ops/issues/${id}/close`); await delay(); return { id } },
-  enterMaintenance: async (payload) => { if (USE_API) return post('/ops/maintenance', { ...payload, enabled: true }); await delay(); return { ...payload } },
-  exitMaintenance: async () => { if (USE_API) return post('/ops/maintenance', { enabled: false }); await delay(); return true },
+  brands: async () => list(async () => get('/brands')),
+  teams: async () => list(async () => get('/teams')),
+  users: async () => list(async () => get('/users')),
+  domains: async () => list(async () => get('/domains')),
+  accounts: async () => list(async () => get('/email-accounts')),
+  mails: async (params) => list(async () => get('/mails' + query(params))),
+  notifications: async () => list(async () => get('/notifications')),
+  activities: async () => list(async () => get('/activity-logs')),
+  loginAudits: async () => list(async () => get('/login-audits')),
+  failedJobs: async () => list(async () => get('/admin/jobs/failed')),
+  imapStatus: async () => list(async () => get('/admin/imap-status')),
+  dashboard: async () => get('/dashboard/stats'),
+
+  domainAccess: async () => get('/domains/access'),
+  discoverDomain: async (domain) => post('/domains/discover', { domain }),
+  createDomain: async (data) => post('/domains', data),
+  deleteDomain: async (id) => remove(`/domains/${id}`),
+  createBrand: async (data) => post('/brands', data),
+  createTeam: async (data) => post('/teams', data),
+  createUser: async (data) => post('/users', data),
+
+  createAccount: async (data) => post('/email-accounts', data),
+  updateAccount: async (id, data, updatedAt) =>
+    put(`/email-accounts/${id}`, updatedAt ? { ...data, updated_at: updatedAt } : data),
+  deleteAccount: async (id) => remove(`/email-accounts/${id}`),
+  assignAccount: async (accountId, userId) =>
+    patch(`/email-accounts/${accountId}/assign/${userId}`, { can_send: true, can_receive: true }),
+  revokeAssignment: async (accountId, userId) =>
+    remove(`/email-accounts/${accountId}/assign/${userId}`),
+  syncAccount: async (id) => post(`/email-accounts/${id}/sync`),
+  webmailToken: async (accountId) => post(`/email-accounts/${accountId}/webmail-token`),
+  setDomainSync: async (id, payload) => patch(`/domains/${id}/sync`, payload),
+  setAccountSync: async (id, payload) => patch(`/email-accounts/${id}/sync`, payload),
+  autoAssignPreview: async (account) => post('/email-accounts/auto-assign-preview', account),
+
+  markNotificationRead: async (id) => put(`/notifications/${id}/read`),
+  markAllRead: async () => put('/notifications/read-all'),
+  notificationsPoll: async (after = null) =>
+    get('/notifications/poll' + (after !== null && after !== undefined && after !== '' ? '?after=' + encodeURIComponent(after) : '')),
+
+  changePassword: async (data) => post('/change-password', data),
+  updateUser: async (id, data) => patch(`/users/${id}`, data),
+  suspendUser: async (id, payload) =>
+    patch(`/users/${id}/suspend`, typeof payload === 'string' ? { reason: payload } : payload),
+  unsuspendUser: async (id) => patch(`/users/${id}/unsuspend`),
+  restoreUser: async (id) => patch(`/users/${id}/restore`),
+  forceDeleteUser: async (id) => remove(`/users/${id}/force-delete`),
+  resetPassword: async (payload) => post('/change-password', payload),
+
+  addTeamMember: async (teamId, userId) => post(`/teams/${teamId}/members`, { user_id: userId }),
+  removeTeamMember: async (teamId, userId) => remove(`/teams/${teamId}/members/${userId}`),
+  updateAssignment: async (accountId, userId, payload) =>
+    patch(`/email-accounts/${accountId}/assign/${userId}`, payload),
+
+  opsSummary: async () => get('/ops/summary'),
+  opsSyncRuns: async () => list(async () => get('/ops/sync-runs')),
+  opsSyncRun: async (id) =>
+    list(async () => get('/ops/sync-runs' + (id !== null && id !== undefined ? `?id=${encodeURIComponent(id)}` : ''))),
+  opsMail: async (params) => list(async () => get('/ops/mail' + query(params))),
+  opsMailDetail: async (id) => get(`/mails/${id}`),
+  opsIssues: async () => list(async () => get('/ops/issues')),
+  opsIssue: async (id) => get(`/ops/issues/${id}/timeline`),
+  opsIssueTimeline: async (id) => get(`/ops/issues/${id}/timeline`),
+  opsEvents: async () => list(async () => get('/ops/events')),
+  opsStream: async (after) =>
+    get('/ops/stream' + (after !== null && after !== undefined && after !== '' ? '?after=' + encodeURIComponent(after) : '')),
+  opsMetrics: async () => get('/ops/metrics'),
+  mailActivity: async (params) => list(async () => get('/webmail/activity-log' + query(params))),
+
+  acknowledgeIssue: async (id, payload) => patch(`/ops/issues/${id}/ack`, payload),
+  resolveIssue: async (id, payload) => patch(`/ops/issues/${id}/resolve`, payload),
+  assignIssue: async (id, payload) => patch(`/ops/issues/${id}/assign`, payload),
+  snoozeIssue: async (id, payload) => patch(`/ops/issues/${id}/snooze`, payload),
+  startIssue: async (id) => patch(`/ops/issues/${id}/start`),
+  closeIssue: async (id) => patch(`/ops/issues/${id}/close`),
+  enterMaintenance: async (payload) => post('/ops/maintenance', { ...payload, enabled: true }),
+  exitMaintenance: async () => post('/ops/maintenance', { enabled: false }),
+
+  retryJob: async (id) => post(`/admin/jobs/failed/${id}/retry`),
+  retryOpsJob: async (id) => post(`/admin/jobs/failed/${id}/retry`),
+  // No backend cancellation route exists for a failed job; fetch the failed
+  // job list so operators can act through the supported queue controls.
+  cancelOpsJob: async () => list(async () => get('/admin/jobs/failed')),
 }
 
 export default api

@@ -33,7 +33,7 @@ export function setBearerToken(token) {
 }
 
 export function reportClientError({ message, stack = '', url = '', severity = 'warning' }) {
-  if (import.meta.env.VITE_USE_API !== 'true' || typeof fetch === 'undefined') return
+  if (typeof fetch === 'undefined') return
   try {
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
     if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`
@@ -96,8 +96,8 @@ http.interceptors.response.use(
   },
 )
 
-// Both the mock layer and the real API can return either a bare array (legacy
-// aliases) or a { data, links, meta } paginator. Pages always receive an array.
+// The API can return either a bare array (legacy aliases) or a
+// { data, links, meta } paginator. Pages always receive an array.
 export function unwrapList(payload) {
   if (Array.isArray(payload)) return payload
   if (payload && Array.isArray(payload.data)) return payload.data

@@ -4,25 +4,6 @@ import { Alert, Badge, Button, Card, CardBody, CardHeader, Modal, PageHeader, St
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api from '../lib/api'
 
-const DEMO_SUMMARY = {
-  accounts: 7, online: 6, syncing: 1, paused: 1, open_issues: 2,
-  received_today: 42, sent_today: 11, pushed_today: 10, queue_depth: 3, failed_jobs: 2, maintenance: false,
-}
-const DEMO_ISSUES = [
-  { id: 1, severity: 'critical', status: 'open', error_code: 'IMAP_AUTH_FAILED', remediation_hint: 'Rotate the mailbox password', runbook_url: '#', brand: 'oceanbookhouse.com', account: 'hello@oceanbookhouse.com', sla_due_at: null },
-  { id: 2, severity: 'warning', status: 'acknowledged', error_code: 'PUSH_BACKLOG', remediation_hint: 'Retry the reverse-push job', runbook_url: '#', brand: 'xyz.com', account: 'info@xyz.com', sla_due_at: null },
-]
-const DEMO_RUNS = [
-  { id: 12, account: 'sales@xuz.com', outcome: 'success', duration_ms: 820, emails_fetched: 3, started_at: 'just now' },
-  { id: 11, account: 'info@xyz.com', outcome: 'success', duration_ms: 640, emails_fetched: 1, started_at: '2 min ago' },
-  { id: 10, account: 'hello@oceanbookhouse.com', outcome: 'failed', duration_ms: 1200, emails_fetched: 0, started_at: '18 min ago' },
-]
-const DEMO_MAIL = [
-  { id: 1042, account_id: 1, subject: 'Re: Final cover approval', from: 'rebecca@penguinrandomhouse.com', received_at: 'just now', is_read: false },
-  { id: 1041, account_id: 4, subject: 'Publishing form — signed copy', from: 'j.fernandez@barnesandnoble.com', received_at: '2 min ago', is_read: true },
-  { id: 1039, account_id: 1, subject: 'The Journey of Akuma', from: 'abdullah@outlook.com', received_at: '21 min ago', is_read: true },
-]
-
 // Accept both the legacy bare-array responses and paginated envelopes.
 const rowsOf = (payload) => {
   if (Array.isArray(payload)) return payload
@@ -38,7 +19,6 @@ const cursorOf = (payload) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-const USE_API = import.meta.env.VITE_USE_API === 'true'
 const EMPTY_SUMMARY = {
   accounts: 0, online: 0, syncing: 0, paused: 0, open_issues: 0,
   received_today: 0, sent_today: 0, pushed_today: 0, queue_depth: 0,
@@ -47,11 +27,10 @@ const EMPTY_SUMMARY = {
 
 export default function OpsConsole() {
   const toast = useToast()
-  // API mode starts empty; demo fixtures are only for the no-backend mock mode.
-  const [summary, setSummary] = useState(USE_API ? EMPTY_SUMMARY : DEMO_SUMMARY)
-  const [runs, setRuns] = useState(USE_API ? [] : DEMO_RUNS)
-  const [issues, setIssues] = useState(USE_API ? [] : DEMO_ISSUES)
-  const [mail, setMail] = useState(USE_API ? [] : DEMO_MAIL)
+  const [summary, setSummary] = useState(EMPTY_SUMMARY)
+  const [runs, setRuns] = useState([])
+  const [issues, setIssues] = useState([])
+  const [mail, setMail] = useState([])
   const [direction, setDirection] = useState('in')
   const [loading, setLoading] = useState(false)
   const [timeline, setTimeline] = useState(null)

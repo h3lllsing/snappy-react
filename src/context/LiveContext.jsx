@@ -1,23 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import * as mock from '../data/mock'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { navigateTo } from '../lib/navigation'
 import api from '../lib/api'
 
 const LiveCtx = createContext(null)
-const USE_API = import.meta.env.VITE_USE_API === 'true'
 
 export function LiveProvider({ children }) {
-  // In real API mode never seed the UI with demo data: an empty DB must render
-  // empty, otherwise stale mock mails/notifications keep showing forever.
-  const [mails, setMails] = useState(USE_API ? [] : mock.mails)
-  const [notifications, setNotifications] = useState(USE_API ? [] : mock.notifications)
+  // The API is the only source of live state: an empty backend renders empty.
+  const [mails, setMails] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [pulse, setPulse] = useState(0)
 
   useEffect(() => {
-    if (!USE_API) return
     Promise.all([api.mails(), api.notifications()]).then(([m, n]) => {
-      // Always replace, including with empty arrays — otherwise a fresh DB
-      // leaves the initial demo rows visible.
       setMails(Array.isArray(m) ? m : [])
       setNotifications(Array.isArray(n) ? n : [])
     }).catch(() => {})
@@ -42,13 +36,13 @@ export function LiveProvider({ children }) {
   }, [])
 
   const markRead = useCallback((id) => {
-    if (import.meta.env.VITE_USE_API === 'true') api.markNotificationRead(id).catch(() => {})
+    api.markNotificationRead(id).catch(() => {})
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     setMails(prev => prev.map(m => m.id === Number(id) ? { ...m, unread: false } : m))
   }, [])
 
   const markAllRead = useCallback(() => {
-    if (import.meta.env.VITE_USE_API === 'true') api.markAllRead().catch(() => {})
+    api.markAllRead().catch(() => {})
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setMails(prev => prev.map(m => ({ ...m, unread: false })))
   }, [])

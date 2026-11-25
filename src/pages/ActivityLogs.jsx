@@ -182,7 +182,7 @@ export default function ActivityLogs() {
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-muted">Change diff is a local mock preview of the stored audit payload.</p>
+            <p className="text-[11px] text-muted">Change diff is rendered from the stored audit payload.</p>
           </div>
         )}
       </Modal>
