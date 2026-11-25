@@ -193,6 +193,13 @@ export default function Webmail() {
   const [unavailable, setUnavailable] = useState(false)
   const [ssoError, setSsoError] = useState(null)
   const [fullscreen, setFullscreen] = useState(false)
+
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = e => { if (e.key === 'Escape') setFullscreen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreen])
   const frameRef = useRef(null)
   const formRef = useRef(null)
   const ssoDone = useRef(null)
