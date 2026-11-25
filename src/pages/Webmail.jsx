@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bell, ChevronDown, Globe2, Mail, Server, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, ChevronDown, Globe2, Mail, Maximize2, Minimize2, Server, Users, X } from 'lucide-react'
 import { useToast } from '../components/ui'
 import { useLive } from '../context/LiveContext'
 import { useAuth } from '../context/AuthContext'
@@ -192,6 +192,7 @@ export default function Webmail() {
   const [accessData, setAccessData] = useState({ scope: 'assigned', domains: [] })
   const [unavailable, setUnavailable] = useState(false)
   const [ssoError, setSsoError] = useState(null)
+  const [fullscreen, setFullscreen] = useState(false)
   const frameRef = useRef(null)
   const formRef = useRef(null)
   const ssoDone = useRef(null)
@@ -345,6 +346,13 @@ export default function Webmail() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFullscreen(f => !f)}
+            className="p-2 rounded-xl surface-2 border border-app hover:border-indigo-400 text-muted"
+            title={fullscreen ? 'Exit full screen' : 'Full screen webmail (best for composing)'}
+          >
+            {fullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+          </button>
           <button onClick={() => navigate('/notifications')} className="relative p-2 rounded-xl surface-2 border border-app hover:border-indigo-400 text-muted" title={`${unread} unread alerts`}>
             <Bell size={17} />
             {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{unread}</span>}
@@ -481,14 +489,18 @@ export default function Webmail() {
       )}
 
       {!unavailable && (
-      <div className="surface border border-app rounded-2xl overflow-hidden shadow-2xl shadow-indigo-950/20">
+      <div className={fullscreen
+        ? 'fixed inset-0 z-50 bg-[#0b0b10] p-2'
+        : 'surface border border-app rounded-2xl overflow-hidden shadow-2xl shadow-indigo-950/20'}>
         <iframe
           ref={frameRef}
           name="snappyFrame"
           key={account ? account.id : 'empty'}
           src="/webmail/"
           title={`SnappyMail — ${account ? account.email : 'real webmail'}`}
-          className="w-full h-[calc(100vh-19rem)] min-h-[500px] block border-0 bg-[#0b0b10]"
+          className={fullscreen
+            ? 'w-full h-full block border-0 bg-[#0b0b10]'
+            : 'w-full h-[calc(100vh-9rem)] min-h-[700px] block border-0 bg-[#0b0b10]'}
         />
       </div>
       )}
