@@ -23,6 +23,21 @@ const DEMO_MAIL = [
   { id: 1039, account_id: 1, subject: 'The Journey of Akuma', from: 'abdullah@outlook.com', received_at: '21 min ago', is_read: true },
 ]
 
+// Accept both the legacy bare-array responses and paginated envelopes.
+const rowsOf = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  if (Array.isArray(payload?.rows)) return payload.rows
+  return []
+}
+
+const cursorOf = (payload) => {
+  const value = payload?.next_cursor ?? payload?.cursor
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export default function OpsConsole() {
   const toast = useToast()
   const [summary, setSummary] = useState(DEMO_SUMMARY)
@@ -41,9 +56,9 @@ export default function OpsConsole() {
         api.opsSummary(), api.opsSyncRuns(), api.opsIssues(), api.opsMail({ direction }),
       ])
       if (s && Object.keys(s).length) setSummary(s)
-      if (r?.length) setRuns(r)
-      if (i?.length) setIssues(i)
-      if (m?.length) setMail(m)
+      setRuns(rowsOf(r))
+      setIssues(rowsOf(i))
+      setMail(rowsOf(m))
     } catch { toast('Ops data unavailable.', 'error') }
     finally { setLoading(false) }
   }, [toast, direction])
@@ -53,13 +68,15 @@ export default function OpsConsole() {
     const id = setInterval(async () => {
       try {
         const stream = await api.opsStream(cursor)
-        const ids = (stream?.events || []).map((e) => e?.id).filter((v) => typeof v === 'number')
+        const events = rowsOf(stream?.events ?? stream)
+        const ids = events.map((e) => e?.id).filter((v) => typeof v === 'number')
         const maxId = ids.length ? Math.max(...ids) : cursor
+        const nextCursor = cursorOf(stream)
         if (maxId > cursor) {
-          setCursor(stream?.cursor ?? maxId)
+          setCursor(nextCursor ?? maxId)
           load()
-        } else if (typeof stream?.cursor === 'number' && stream.cursor > cursor) {
-          setCursor(stream.cursor)
+        } else if (nextCursor !== null && nextCursor > cursor) {
+          setCursor(nextCursor)
         }
       } catch { /* poll fallback */ }
     }, 30000)

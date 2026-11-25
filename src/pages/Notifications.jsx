@@ -15,24 +15,34 @@ const TYPE_META = {
   email_sync_paused: { icon: PauseCircle, tone: 'text-amber-500 bg-amber-500/10 border-amber-500/20', badge: 'warning', label: 'Sync paused' },
 }
 
+// Accept a bare array or a paginated { data, notifications, next_cursor } payload.
+const rowsOf = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  if (Array.isArray(payload?.notifications)) return payload.notifications
+  if (Array.isArray(payload?.rows)) return payload.rows
+  return []
+}
+
 export default function Notifications() {
   const toast = useToast()
   const { notifications, unread, markRead, markAllRead, toggleDeleted, openWebmail } = useLive()
   const [tab, setTab] = useState('all')
   const [busy, setBusy] = useState(false)
+  const rows = useMemo(() => rowsOf(notifications), [notifications])
 
   const counts = useMemo(() => ({
-    all: notifications.filter(n => !n.deleted).length,
+    all: rows.filter(n => !n.deleted).length,
     unread,
-    trash: notifications.filter(n => n.deleted).length,
-  }), [notifications, unread])
+    trash: rows.filter(n => n.deleted).length,
+  }), [rows, unread])
 
-  const filtered = useMemo(() => notifications.filter(n => {
+  const filtered = useMemo(() => rows.filter(n => {
     if (tab === 'trash') return !!n.deleted
     if (n.deleted) return false
     if (tab === 'unread') return !n.read
     return true
-  }), [notifications, tab])
+  }), [rows, tab])
 
   const handleMarkRead = id => {
     markRead(id)

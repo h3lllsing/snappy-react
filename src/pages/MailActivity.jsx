@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, CalendarDays, Eye, Mail, Search, User } from 'lucide-react'
 import {
   Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select, Table, Td, Th, Tr, useToast,
@@ -18,18 +18,33 @@ const ACTION_VARIANT = {
 
 const display = v => (v === null || v === undefined || v === '' ? '—' : String(v))
 
+// The API can return a bare array (legacy) or a paginated envelope.
+const pageOf = (payload) => {
+  if (Array.isArray(payload)) return { rows: payload, nextCursor: null }
+  const rows = Array.isArray(payload?.data) ? payload.data
+    : Array.isArray(payload?.rows) ? payload.rows
+      : Array.isArray(payload?.items) ? payload.items : []
+  const nextCursor = payload?.next_cursor ?? payload?.cursor ?? null
+  return { rows, nextCursor }
+}
+
 export default function MailActivity() {
   const toast = useToast()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState({ action: '', search: '', from: '', to: '' })
+  const [nextCursor, setNextCursor] = useState(null)
+  const cursorRef = useRef(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ append = false } = {}) => {
     setLoading(true)
     try {
       const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
-      const data = await api.mailActivity(params)
-      setRows(Array.isArray(data) ? data : [])
+      if (append && cursorRef.current) params.cursor = cursorRef.current
+      const page = pageOf(await api.mailActivity(params))
+      cursorRef.current = page.nextCursor
+      setNextCursor(page.nextCursor)
+      setRows(previous => append ? [...previous, ...page.rows] : page.rows)
     } catch {
       toast('Mail activity report unavailable.', 'error', { title: 'Report' })
     } finally {
@@ -96,6 +111,13 @@ export default function MailActivity() {
           </Table>
         )}
       </Card>
+      {nextCursor !== null && nextCursor !== '' && (
+        <div className="flex justify-center">
+          <Button variant="secondary" onClick={() => load({ append: true })} disabled={loading}>
+            {loading ? 'Loading…' : 'Load more activity'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
