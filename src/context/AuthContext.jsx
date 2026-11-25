@@ -60,7 +60,9 @@ export function AuthProvider({ children }) {
       } catch { /* keep polling */ }
     }
     tick()
-    const id = setInterval(tick, 5000)
+    // Fast poll so a newly synced mail raises `pulse` within ~2s; the webmail
+    // iframe then forces an immediate SnappyMail list refresh via postMessage.
+    const id = setInterval(tick, 2000)
     return () => { alive = false; clearInterval(id) }
   }, [user, toast, live])
 
