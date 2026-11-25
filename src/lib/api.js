@@ -57,6 +57,7 @@ export const api = {
   revokeAssignment: async (accountId, userId) =>
     remove(`/email-accounts/${accountId}/assign/${userId}`),
   syncAccount: async (id) => post(`/email-accounts/${id}/sync`),
+  rediscover: async (id) => post(`/email-accounts/${id}/rediscover`),
   webmailToken: async (accountId) => post(`/email-accounts/${accountId}/webmail-token`),
   setDomainSync: async (id, payload) => patch(`/domains/${id}/sync`, payload),
   setAccountSync: async (id, payload) => patch(`/email-accounts/${id}/sync`, payload),

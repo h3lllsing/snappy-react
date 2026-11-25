@@ -24,6 +24,7 @@ export default function AccountDetail() {
   const [perms, setPerms] = useState({})
   const [addUserId, setAddUserId] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [rechecking, setRechecking] = useState(false)
   const mails = useMemo(() => {
     const map = new Map()
     ;(fetchedMails || []).forEach(m => map.set(m.id, m))
@@ -123,6 +124,27 @@ export default function AccountDetail() {
     }
   }
 
+  const recheckConnection = async () => {
+    setRechecking(true)
+    try {
+      const result = await api.rediscover(account.id)
+      toast(`Connection OK — ${result?.imap_host || 'host unchanged'}.`, 'success', { title: 'Rechecked connection' })
+    } catch (error) {
+      toast(error?.message || 'Could not recheck connection.', 'error', { title: 'Recheck failed' })
+      setRechecking(false)
+      return
+    }
+    try {
+      const refreshed = await api.accounts()
+      const found = refreshed.find(x => String(x.id) === String(id))
+      if (found) setAccount(found)
+    } catch {
+      toast('Connection rechecked, but the account could not be refreshed.', 'error', { title: 'Refresh failed' })
+    } finally {
+      setRechecking(false)
+    }
+  }
+
   const toggleSync = async () => {
     const next = !account.sync_enabled
     try {
@@ -164,6 +186,7 @@ export default function AccountDetail() {
         backTo={() => navigate('/accounts')}
         actions={<>
           <Link to={`/webmail/${account.id}`}><Button variant="secondary"><ExternalLink size={15} /> Open Webmail</Button></Link>
+          <Button variant="secondary" onClick={recheckConnection} loading={rechecking}><RefreshCw size={15} /> Recheck connection</Button>
           <Button onClick={syncNow} loading={syncing}><RefreshCw size={15} /> Sync Now</Button>
         </>}
       />

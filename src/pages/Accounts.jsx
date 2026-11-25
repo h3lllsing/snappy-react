@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowDown, ArrowUp, ChevronDown, Download, Edit3, ExternalLink, Globe2,
-  Inbox, Mail, Plus, Search, Trash2, UserCheck, Users, Workflow,
+  Inbox, Mail, Plus, RefreshCw, Search, Trash2, UserCheck, Users, Workflow,
 } from 'lucide-react'
 import {
   Avatar, Badge, Button, Card, CardBody, Checkbox, ConfirmDialog, EmptyState, Field,
@@ -95,6 +95,21 @@ export default function Accounts() {
       toast(next ? 'Mailbox sync enabled' : 'Mailbox sync paused', 'success', { title: a.email })
     } catch {
       toast('Could not change sync state.', 'error', { title: 'Sync control failed' })
+    }
+  }
+
+  const recheckConnection = async a => {
+    try {
+      const result = await api.rediscover(a.id)
+      toast(`Connection OK — ${result?.imap_host || a.imap_host || 'host unchanged'}.`, 'success', { title: a.email })
+    } catch (error) {
+      toast(error?.message || 'Could not recheck connection.', 'error', { title: 'Recheck failed' })
+      return
+    }
+    try {
+      setAccounts(await api.accounts())
+    } catch {
+      toast('Connection rechecked, but the account list could not be refreshed.', 'error', { title: 'Refresh failed' })
     }
   }
 
@@ -319,7 +334,8 @@ export default function Accounts() {
                         <Button size="sm" variant="ghost" onClick={() => setConfirm({ account: a, action: 'force' })}><Trash2 size={14} className="text-red-500" /></Button>
                       </> : <>
                         <Link to={`/webmail/${a.id}`} title="Open Webmail"><Button size="sm" variant="secondary"><ExternalLink size={13} /> Webmail</Button></Link>
-                        <Button size="sm" variant="ghost" title="Edit" onClick={() => openEdit(a)}><Edit3 size={14} /></Button>
+                        <Button size="sm" variant="ghost" title="Recheck connection" onClick={() => recheckConnection(a)}><RefreshCw size={14} /></Button>
+                         <Button size="sm" variant="ghost" title="Edit" onClick={() => openEdit(a)}><Edit3 size={14} /></Button>
                         <Button size="sm" variant="ghost" title="Delete" onClick={() => setConfirm({ account: a, action: 'delete' })}><Trash2 size={14} className="text-red-500" /></Button>
                       </>}
                     </div>
