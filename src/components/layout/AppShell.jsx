@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Activity, Bell, Boxes, ChevronDown, Command, CreditCard, FolderKanban, Globe2,
+  Activity, Bell, BookOpen, Boxes, ChevronDown, Command, CreditCard, FolderKanban, Globe2,
   Inbox, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Server, Settings2,
   ShieldCheck, Sun, Users, UsersRound, X, Zap,
 } from 'lucide-react'
@@ -35,6 +35,7 @@ const NAV = [
     { to: '/mail-activity', label: 'Mail Activity', icon: Activity, roles: ['super-admin','admin'] },
     { to: '/login-audits', label: 'Login History', icon: ShieldCheck, roles: ['super-admin'] },
     { to: '/queue-monitor', label: 'Queue Monitor', icon: Zap, roles: ['super-admin'] },
+    { to: '/workflow', label: 'Portal Workflow', icon: BookOpen, roles: ['super-admin'] },
   ]},
 ]
 
