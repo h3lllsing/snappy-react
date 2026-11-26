@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, Loader2, X } from 'lucide-react'
 
 const cx = (...s) => s.filter(Boolean).join(' ')
 
@@ -236,28 +236,155 @@ export function ConfirmDialog({ open, title = 'Are you sure?', message, confirmL
 }
 
 /* ---------- Toast system ---------- */
+const MAX_VISIBLE_TOASTS = 4
+const TOAST_META = {
+  success: { accent: 'border-l-emerald-500', icon: Check, iconClass: 'text-emerald-500', ring: 'focus:ring-emerald-500/60' },
+  error: { accent: 'border-l-red-500', icon: AlertTriangle, iconClass: 'text-red-500', ring: 'focus:ring-red-500/60' },
+  warning: { accent: 'border-l-amber-500', icon: AlertTriangle, iconClass: 'text-amber-500', ring: 'focus:ring-amber-500/60' },
+  info: { accent: 'border-l-sky-500', icon: Info, iconClass: 'text-sky-500', ring: 'focus:ring-sky-500/60' },
+}
+
+const clearToastTimer = (timers, id) => {
+  const record = timers.get(id)
+  if (!record) return
+  if (record.timeout) clearTimeout(record.timeout)
+  timers.delete(id)
+}
+
+const pauseToastTimer = (timers, id) => {
+  const record = timers.get(id)
+  if (!record || !record.timeout) return
+  clearTimeout(record.timeout)
+  record.remaining = Math.max(0, record.remaining - (Date.now() - record.startedAt))
+  record.timeout = null
+  timers.set(id, record)
+}
+
 const ToastCtx = createContext(null)
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
-  const push = useCallback((message, type = 'success', extra = {}) => {
-    const id = Date.now() + Math.random()
-    setToasts(t => [...t, { id, message, type, ...extra }])
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), extra.duration || 5500)
+  const toastsRef = useRef([])
+  const timersRef = useRef(new Map())
+  const nextIdRef = useRef(0)
+  const apiRef = useRef({})
+
+  // One commit path keeps the rendered stack and the ref in sync, and drops
+  // timers belonging to toasts pushed out of the visible four.
+  const commit = useCallback((next) => {
+    const visible = next.slice(-MAX_VISIBLE_TOASTS)
+    const keep = new Set(visible.map(t => t.id))
+    timersRef.current.forEach((_, id) => { if (!keep.has(id)) clearToastTimer(timersRef.current, id) })
+    toastsRef.current = visible
+    setToasts(visible)
   }, [])
+
+  const dismiss = useCallback((id) => {
+    clearToastTimer(timersRef.current, id)
+    commit(toastsRef.current.filter(t => t.id !== id))
+  }, [commit])
+
+  const dismissAll = useCallback(() => {
+    timersRef.current.forEach(record => { if (record.timeout) clearTimeout(record.timeout) })
+    timersRef.current.clear()
+    toastsRef.current = []
+    setToasts([])
+  }, [])
+
+  const pause = useCallback((id) => pauseToastTimer(timersRef.current, id), [])
+
+  const resume = useCallback((id) => {
+    const timers = timersRef.current
+    const record = timers.get(id)
+    if (!record || record.timeout || !Number.isFinite(record.remaining)) return
+    record.startedAt = Date.now()
+    record.timeout = setTimeout(() => {
+      timers.delete(id)
+      apiRef.current.dismiss(id)
+    }, record.remaining)
+    timers.set(id, record)
+  }, [])
+
+  apiRef.current = { dismiss }
+
+  // push stays callable exactly as before (push(message, type, extra)) and
+  // also carries the controller methods used for dedupe and logout cleanup.
+  const push = useCallback((message, type = 'success', extra = {}) => {
+    const rawKey = extra.dedupeKey ?? extra.id
+    const key = rawKey !== undefined && rawKey !== null ? String(rawKey) : null
+    const existing = key !== null
+      ? toastsRef.current.find(t => t.key === key)
+      : null
+    if (existing) {
+      commit(toastsRef.current.map(t => t.id === existing.id ? {
+        ...t, ...extra, id: t.id, key: t.key, message, type, count: (t.count || 1) + 1,
+      } : t))
+      return existing.id
+    }
+
+    const id = extra.id != null ? String(extra.id) : `toast-${++nextIdRef.current}`
+    const duration = extra.duration ?? (type === 'error' ? 10000 : 4000)
+    const sticky = Boolean(extra.persistent || extra.action)
+    if (!sticky && duration > 0) {
+      const timeout = setTimeout(() => {
+        timersRef.current.delete(id)
+        apiRef.current.dismiss(id)
+      }, duration)
+      timersRef.current.set(id, { timeout, remaining: duration, startedAt: Date.now() })
+    }
+    commit([...toastsRef.current, { ...extra, id, key, message, type, count: 1 }])
+    return id
+  }, [commit])
+
+  useEffect(() => () => {
+    timersRef.current.forEach(record => { if (record.timeout) clearTimeout(record.timeout) })
+    timersRef.current.clear()
+  }, [])
+
+  const toast = useMemo(
+    () => Object.assign(push, { dismiss, dismissAll, pause, resume }),
+    [push, dismiss, dismissAll, pause, resume],
+  )
+
   return (
-    <ToastCtx.Provider value={push}>
+    <ToastCtx.Provider value={toast}>
       {children}
-      <div className="fixed top-4 right-4 z-[300] flex flex-col gap-2 w-[min(380px,calc(100vw-2rem))]">
-        {toasts.map(t => (
-          <div key={t.id} className="animate-toast-in glass rounded-xl shadow-2xl p-3.5 flex items-start gap-3 border-l-4 border-l-indigo-500">
-            <div className="flex-1">
-              {t.title && <p className="text-sm font-semibold">{t.title}</p>}
-              <p className="text-xs text-muted">{t.message}</p>
-              {t.action && <button onClick={() => { t.action.onClick(); setToasts(x => x.filter(y => y.id !== t.id)) }} className="text-xs text-indigo-500 font-semibold mt-1.5 hover:underline">{t.action.label} →</button>}
+      <div className="pointer-events-none fixed top-4 right-4 z-[300] flex max-h-[calc(100vh-2rem)] w-[min(380px,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto"
+        role="region" aria-label="Notifications">
+        {toasts.slice(-MAX_VISIBLE_TOASTS).map(t => {
+          const meta = TOAST_META[t.type] || TOAST_META.info
+          const Icon = meta.icon
+          return (
+            <div key={t.id}
+              role={t.type === 'error' ? 'alert' : 'status'}
+              onMouseEnter={() => pause(t.id)}
+              onMouseLeave={() => resume(t.id)}
+              onFocus={() => pause(t.id)}
+              onBlur={() => resume(t.id)}
+              className={cx('pointer-events-auto animate-toast-in glass rounded-xl shadow-2xl p-3.5 flex items-start gap-3 border-l-4', meta.accent)}>
+              <Icon size={16} className={cx('mt-0.5 shrink-0', meta.iconClass)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  {t.title && <p className="text-sm font-semibold">{t.title}</p>}
+                  {t.count > 1 && <span className="rounded-full surface-2 px-1.5 py-0.5 text-[10px] font-bold text-muted">×{t.count}</span>}
+                </div>
+                <p className="text-xs text-muted">{t.message}</p>
+                {t.action && (
+                  <button type="button" onClick={() => { t.action.onClick(); dismiss(t.id) }}
+                    className={cx('mt-1.5 text-xs font-semibold hover:underline focus:outline-none focus:ring-2', meta.ring)}>
+                    {t.action.label} →
+                  </button>
+                )}
+              </div>
+              <button type="button" aria-label="Dismiss notification" onClick={() => dismiss(t.id)}
+                className={cx('p-1.5 rounded-lg text-muted hover:surface-2 hover:text-[var(--text)] focus:outline-none focus:ring-2', meta.ring)}>
+                <X size={14} />
+              </button>
             </div>
-            <button onClick={() => setToasts(x => x.filter(y => y.id !== t.id))} className="text-muted"><X size={14} /></button>
-          </div>
-        ))}
+          )
+        })}
+      </div>
+      <div className="sr-only" role="status" aria-live="polite">
+        {toasts.map(t => `${t.title ? `${t.title}: ` : ''}${t.message}${t.count > 1 ? ` (×${t.count})` : ''}`).join(' ')}
       </div>
     </ToastCtx.Provider>
   )

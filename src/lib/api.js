@@ -79,8 +79,18 @@ export const api = {
 
   markNotificationRead: async (id) => put(`/notifications/${id}/read`),
   markAllRead: async () => put('/notifications/read-all'),
-  notificationsPoll: async (after = null) =>
-    get('/notifications/poll' + (after !== null && after !== undefined && after !== '' ? '?after=' + encodeURIComponent(after) : '')),
+  // Keyset poll: pass the opaque cursor and the page size as query params and
+  // opt out of HTTP caching. The response envelope is returned untouched.
+  notificationsPoll: async (cursor = null, opts = {}) => {
+    const params = { limit: opts.limit ?? 50 }
+    if (cursor !== null && cursor !== undefined && cursor !== '') params.cursor = cursor
+    if (opts.after !== null && opts.after !== undefined && opts.after !== '') params.after = opts.after
+    const { data } = await http.get('/notifications/poll', {
+      params,
+      headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+    })
+    return data
+  },
 
   changePassword: async (data) => post('/change-password', data),
   updateUser: async (id, data) => patch(`/users/${id}`, data),

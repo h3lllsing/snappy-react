@@ -4,7 +4,7 @@ import {
   PauseCircle, RotateCcw, Trash2,
 } from 'lucide-react'
 import {
-  Badge, Button, Card, CardBody, EmptyState, PageHeader, Tabs, useToast,
+  Badge, Button, Card, CardBody, EmptyState, PageHeader, Tabs,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
 import { useLive } from '../context/LiveContext'
@@ -25,7 +25,6 @@ const rowsOf = (payload) => {
 }
 
 export default function Notifications() {
-  const toast = useToast()
   const { notifications, unread, markRead, markAllRead, toggleDeleted, openWebmail } = useLive()
   const [tab, setTab] = useState('all')
   const [busy, setBusy] = useState(false)
@@ -44,27 +43,18 @@ export default function Notifications() {
     return true
   }), [rows, tab])
 
-  const handleMarkRead = id => {
-    markRead(id)
-    toast('Marked as read.', 'success', { title: 'Notification updated' })
-  }
+  // The list and unread badge are the confirmation; no toast is needed.
+  const handleMarkRead = id => markRead(id)
 
   const markAll = () => {
     setBusy(true)
     markAllRead()
-    toast('All notifications are now read.', 'success', { title: 'Marked all read' })
     setTimeout(() => setBusy(false), 250)
   }
 
-  const handleDelete = id => {
-    toggleDeleted(id)
-    toast('Moved to trash.', 'success', { title: 'Notification deleted' })
-  }
+  const handleDelete = id => toggleDeleted(id)
 
-  const handleRestore = id => {
-    toggleDeleted(id)
-    toast('Restored to notifications.', 'success', { title: 'Notification restored' })
-  }
+  const handleRestore = id => toggleDeleted(id)
 
   return (
     <div className="animate-fade-up">
