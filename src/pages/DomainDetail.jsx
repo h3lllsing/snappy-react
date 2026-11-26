@@ -156,12 +156,12 @@ export default function DomainDetail() {
           <Card className="lg:col-span-2">
             <CardHeader title="Bulk Add Accounts" subtitle="One mailbox per line in username:password format." actions={<Badge variant="primary"><Upload size={11} /> Import</Badge>} />
             <CardBody className="space-y-4">
-              <Field label="Account list" required hint="The username can be a full address (sales@xuz.com) or just the local part (sales).">
+              <Field label="Account list" required hint="The username can be a full address (user@example.com) or just the local part (user).">
                 <Textarea
                   rows={9}
                   value={bulk}
                   onChange={e => setBulk(e.target.value)}
-                  placeholder={'sales:StrongPass123!\nsupport:AnotherPass456!\norders@xuz.com:ThirdPass789!'}
+                  placeholder={'user:Password123!\nsupport:Password456!\nuser@example.com:Password789!'}
                   className="font-mono text-xs"
                 />
               </Field>

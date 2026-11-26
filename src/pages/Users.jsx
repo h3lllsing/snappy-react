@@ -9,7 +9,7 @@ import {
   Input, Modal, PageHeader, Select, Table, Tabs, Td, Textarea, Th, Tr, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 const emptyForm = { name: '', email: '', password: '', role: 'user', team_lead_id: '', status: 'active' }
 
@@ -35,9 +35,9 @@ export default function Users() {
     return () => { alive = false }
   }, [toast])
 
-  const leads = useMemo(() => users.filter(u => u.role === 'team-lead' && !u.deleted), [users])
+  const leads = useMemo(() => users.filter(u => u.role === 'team-lead' && !u.deleted_at), [users])
   const filtered = useMemo(() => users.filter(u => {
-    if (tab === 'trash' ? !u.deleted : u.deleted) return false
+    if (tab === 'trash' ? !u.deleted_at : !!u.deleted_at) return false
     if (roleFilter && u.role !== roleFilter) return false
     if (statusFilter && u.status !== statusFilter) return false
     if (query && !`${u.name} ${u.email} ${u.team || ''}`.toLowerCase().includes(query.toLowerCase())) return false
@@ -45,9 +45,24 @@ export default function Users() {
   }), [users, tab, query, roleFilter, statusFilter])
 
   const counts = useMemo(() => ({
-    active: users.filter(u => !u.deleted).length,
-    trash: users.filter(u => u.deleted).length,
+    active: users.filter(u => !u.deleted_at).length,
+    trash: users.filter(u => !!u.deleted_at).length,
   }), [users])
+
+  const refreshUsers = async () => {
+    try {
+      setUsers(await api.users())
+    } catch {
+      toast('Saved on the server, but the list could not be refreshed. Reload the page.', 'warning', { title: 'Stale list' })
+    }
+  }
+  const showError = (err, fallback, title = 'Action failed') =>
+    toast(describeApiError(err, fallback), 'error', { title })
+  const lastLogin = value => {
+    if (!value) return '—'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
+  }
 
   const set = key => e => setForm(f => ({ ...f, [key]: e.target.value }))
   const teamName = u => {
@@ -68,68 +83,68 @@ export default function Users() {
       toast('Name, email and password are required.', 'error', { title: 'Missing fields' })
       return
     }
-    if (editing) {
-      const payload = {
-        name: form.name.trim(), email: form.email.trim(), role: form.role, status: form.status,
-        team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null,
-        team: form.team_lead_id ? (leads.find(l => String(l.id) === form.team_lead_id)?.team || editing.team) : '—',
+    try {
+      if (editing) {
+        await api.updateUser(editing.id, {
+          name: form.name.trim(), email: form.email.trim(), role: form.role,
+        })
+        toast(`${form.name.trim()} updated.`, 'success', { title: 'User saved' })
+      } else {
+        await api.createUser({
+          name: form.name.trim(), email: form.email.trim(), password: form.password, role: form.role,
+        })
+        toast(`${form.name.trim()} was added as ${form.role}.`, 'success', { title: 'User created' })
       }
-      await api.updateUser(editing.id, payload)
-      setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...payload } : u))
-      toast(`${form.name.trim()} updated.`, 'success', { title: 'User saved' })
-    } else {
-      const lead = leads.find(l => String(l.id) === form.team_lead_id)
-      const payload = {
-        name: form.name.trim(), email: form.email.trim(), password: form.password, role: form.role,
-        team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null,
-        team: lead?.team || '—', status: form.status,
-      }
-      const created = await api.createUser(payload)
-      const row = created || { id: Date.now(), ...payload, last_login: 'never', accounts: 0 }
-      setUsers(prev => [...prev, { last_login: 'never', accounts: 0, ...row }])
-      toast(`${row.name} was added as ${row.role}.`, 'success', { title: 'User created' })
+      await refreshUsers()
+      setAddOpen(false)
+      setEditing(null)
+      setForm(emptyForm)
+    } catch (err) {
+      showError(err, 'Could not save the user.', editing ? 'Update failed' : 'Create failed')
     }
-    setAddOpen(false)
-    setEditing(null)
-    setForm(emptyForm)
   }
 
   const toggleSuspend = async u => {
-    if (u.status === 'active') { setSuspendTarget(u); setReason('') }
-    else {
+    if (u.status === 'active') { setSuspendTarget(u); setReason(''); return }
+    try {
       await api.unsuspendUser(u.id)
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'active', suspension_reason: null } : x))
+      await refreshUsers()
       toast(`${u.name} is active again.`, 'success', { title: 'User unsuspended' })
+    } catch (err) {
+      showError(err, 'Could not unsuspend the user.', 'Unsuspend failed')
     }
   }
 
   const applySuspend = async () => {
     if (!suspendTarget) return
     const r = reason.trim() || 'Suspended by administrator'
-    await api.suspendUser(suspendTarget.id, r)
-    setUsers(prev => prev.map(x => x.id === suspendTarget.id ? {
-      ...x, status: 'suspended', suspension_reason: r,
-    } : x))
-    toast(`${suspendTarget.name} was suspended.`, 'warning', { title: 'User suspended' })
-    setSuspendTarget(null)
+    try {
+      await api.suspendUser(suspendTarget.id, r)
+      await refreshUsers()
+      toast(`${suspendTarget.name} was suspended.`, 'warning', { title: 'User suspended' })
+      setSuspendTarget(null)
+    } catch (err) {
+      showError(err, 'Could not suspend the user.', 'Suspend failed')
+    }
   }
 
   const runConfirm = async () => {
     if (!confirm) return
     const { user, action } = confirm
-    if (action === 'delete') {
-      const deleted_at = new Date().toISOString()
-      await api.updateUser(user.id, { deleted: true, deleted_at })
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, deleted: true, deleted_at } : u))
-      toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' })
-    } else if (action === 'restore') {
-      await api.restoreUser(user.id)
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, deleted: false, deleted_at: null } : u))
-      toast(`${user.name} restored.`, 'success', { title: 'User restored' })
-    } else if (action === 'force') {
-      await api.forceDeleteUser(user.id)
-      setUsers(prev => prev.filter(u => u.id !== user.id))
-      toast(`${user.name} permanently removed.`, 'success', { title: 'User purged' })
+    try {
+      if (action === 'delete') {
+        await api.deleteUser(user.id)
+        toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' })
+      } else if (action === 'restore') {
+        await api.restoreUser(user.id)
+        toast(`${user.name} restored.`, 'success', { title: 'User restored' })
+      } else if (action === 'force') {
+        await api.forceDeleteUser(user.id)
+        toast(`${user.name} permanently removed.`, 'success', { title: 'User purged' })
+      }
+      await refreshUsers()
+    } catch (err) {
+      showError(err, 'Could not change the user.', action === 'restore' ? 'Restore failed' : 'Delete failed')
     }
     setConfirm(null)
   }
@@ -151,7 +166,7 @@ export default function Users() {
 
       <div className="grid gap-3 sm:grid-cols-3 mb-5">
         <Card className="p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center"><UsersIcon size={18} /></div><div><p className="text-[11px] text-muted uppercase tracking-wider">Total users</p><p className="text-xl font-bold">{counts.active}</p></div></Card>
-        <Card className="p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center"><UserX size={18} /></div><div><p className="text-[11px] text-muted uppercase tracking-wider">Suspended</p><p className="text-xl font-bold">{users.filter(u => u.status === 'suspended' && !u.deleted).length}</p></div></Card>
+        <Card className="p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center"><UserX size={18} /></div><div><p className="text-[11px] text-muted uppercase tracking-wider">Suspended</p><p className="text-xl font-bold">{users.filter(u => u.status === 'suspended' && !u.deleted_at).length}</p></div></Card>
         <Card className="p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center"><ShieldCheck size={18} /></div><div><p className="text-[11px] text-muted uppercase tracking-wider">Team leads</p><p className="text-xl font-bold">{leads.length}</p></div></Card>
       </div>
 
@@ -207,8 +222,8 @@ export default function Users() {
                   <Td><span className="text-xs text-muted flex items-center gap-1.5"><Mail size={12} />{u.email}</span></Td>
                   <Td><Badge role={u.role} className="text-[10px]">{u.role}</Badge></Td>
                   <Td><span className="text-xs">{teamName(u)}</span></Td>
-                  <Td><Badge variant={u.deleted ? 'danger' : u.status} dot className="text-[10px]">{u.deleted ? 'trashed' : u.status}</Badge></Td>
-                  <Td><span className="text-xs text-muted whitespace-nowrap">{u.last_login}</span></Td>
+                  <Td><Badge variant={u.deleted_at ? 'danger' : u.status} dot className="text-[10px]">{u.deleted_at ? 'trashed' : u.status}</Badge></Td>
+                  <Td><span className="text-xs text-muted whitespace-nowrap">{lastLogin(u.last_login)}</span></Td>
                   <Td><span className="text-xs font-semibold">{u.accounts}</span></Td>
                   <Td>
                     <div className="flex items-center justify-end gap-1.5">
@@ -243,8 +258,8 @@ export default function Users() {
       >
         <form onSubmit={saveUser} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full name" required><Input value={form.name} onChange={set('name')} placeholder="e.g. Fatima Sheikh" /></Field>
-            <Field label="Email" required><Input type="email" value={form.email} onChange={set('email')} placeholder="user@xuz.com" /></Field>
+            <Field label="Full name" required><Input value={form.name} onChange={set('name')} placeholder="e.g. Jane Doe" /></Field>
+            <Field label="Email" required><Input type="email" value={form.email} onChange={set('email')} placeholder="user@example.com" /></Field>
           </div>
           <Field label={editing ? 'New password (optional)' : 'Password'} required={!editing}>
             <Input type="password" value={form.password} onChange={set('password')} placeholder="••••••••" />

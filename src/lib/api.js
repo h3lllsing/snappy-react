@@ -12,6 +12,18 @@ const query = (params) => {
   return search ? `?${search}` : ''
 }
 
+// Shared by management screens so 404/409/422 produce real, readable toasts
+// instead of silently accepting a local change.
+export function describeApiError(err, fallback = 'The request could not be completed.') {
+  if (err?.status === 404) return err.message || 'This record no longer exists. Refresh and try again.'
+  if (err?.status === 409) return err.message || 'This record changed elsewhere. Refresh and retry.'
+  if (err?.status === 422) {
+    const fields = err.errors && typeof err.errors === 'object' ? Object.values(err.errors).flat().filter(Boolean) : []
+    return fields.join(' ') || err.message || 'Please check the entered values.'
+  }
+  return err?.message || fallback
+}
+
 export const api = {
   me: async () => get('/user'),
   login: async ({ email, password }) => {
@@ -43,7 +55,9 @@ export const api = {
   domainAccess: async () => get('/domains/access'),
   discoverDomain: async (domain) => post('/domains/discover', { domain }),
   createDomain: async (data) => post('/domains', data),
+  updateDomain: async (id, data) => patch(`/domains/${id}`, data),
   deleteDomain: async (id) => remove(`/domains/${id}`),
+  restoreDomain: async (id) => post(`/domains/${id}/restore`),
   createBrand: async (data) => post('/brands', data),
   createTeam: async (data) => post('/teams', data),
   createUser: async (data) => post('/users', data),
@@ -70,6 +84,7 @@ export const api = {
 
   changePassword: async (data) => post('/change-password', data),
   updateUser: async (id, data) => patch(`/users/${id}`, data),
+  deleteUser: async (id) => remove(`/users/${id}`),
   suspendUser: async (id, payload) =>
     patch(`/users/${id}/suspend`, typeof payload === 'string' ? { reason: payload } : payload),
   unsuspendUser: async (id) => patch(`/users/${id}/unsuspend`),
@@ -95,7 +110,8 @@ export const api = {
   opsStream: async (after) =>
     get('/ops/stream' + (after !== null && after !== undefined && after !== '' ? '?after=' + encodeURIComponent(after) : '')),
   opsMetrics: async () => get('/ops/metrics'),
-  mailActivity: async (params) => list(async () => get('/webmail/activity-log' + query(params))),
+  // Keep the { data, next_cursor } envelope intact so Mail Activity can page.
+  mailActivity: async (params) => get('/webmail/activity-log' + query(params)),
 
   acknowledgeIssue: async (id, payload) => patch(`/ops/issues/${id}/ack`, payload),
   resolveIssue: async (id, payload) => patch(`/ops/issues/${id}/resolve`, payload),

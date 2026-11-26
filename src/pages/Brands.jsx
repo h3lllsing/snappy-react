@@ -9,7 +9,7 @@ import {
   Input, Modal, PageHeader, Select, Table, Tabs, Td, Th, Tr, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 const emptyForm = { domain: '', name: '', lead_id: '', status: 'active' }
 
@@ -28,7 +28,8 @@ export default function Brands() {
   const [users, setUsers] = useState([])
   const [accounts, setAccounts] = useState([])
   const [tab, setTab] = useState('matrix')
-  const [expanded, setExpanded] = useState(() => new Set([1]))
+  const [expanded, setExpanded] = useState(() => new Set())
+  const [brandMembers, setBrandMembers] = useState({})
   const [query, setQuery] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -37,23 +38,42 @@ export default function Brands() {
   const [preview, setPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
-  const leadById = (id) => users.find(u => u.id === Number(id) || u.id === id)
-  const teamMembers = (leadId) => {
-    const lid = Number(leadId)
-    const teamIds = teams.filter(t => Number(t.lead_id) === lid).map(t => t.id)
-    return users.filter(u => {
-      const cand = u.lead_id ?? u.team_lead_id ?? u.manager_id ?? u.leadId ?? u.teamLeadId
-      if (cand != null && Number(cand) === lid) return true
-      if (u.team_id != null && teamIds.includes(Number(u.team_id))) return true
-      if (u.teamId != null && teamIds.includes(Number(u.teamId))) return true
-      return false
-    })
-  }
+  const userById = (id) => users.find(u => u.id === Number(id) || u.id === id)
+  const membersFor = brand => brandMembers[brand.id] || []
   const accountsForBrand = (domain) => accounts.filter(a => a.brand === domain || a.domain === domain)
+  const showError = (err, fallback, title = 'Action failed') =>
+    toast(describeApiError(err, fallback), 'error', { title })
+
+  // Member identities come from the server's auto-assign preview, never from
+  // guesses about team_lead_id or local fixtures.
+  const loadBrandMembers = async list => {
+    const results = await Promise.allSettled(list.map(b => api.autoAssignPreview({ brand_id: b.id })))
+    const map = {}
+    results.forEach((res, index) => {
+      if (res.status === 'fulfilled' && Array.isArray(res.value?.members)) {
+        map[list[index].id] = res.value.members
+      }
+    })
+    setBrandMembers(map)
+  }
+  const refreshBrands = async () => {
+    try {
+      const rows = await api.brands()
+      setBrands(rows)
+      await loadBrandMembers(rows)
+    } catch {
+      toast('Saved on the server, but brands could not be refreshed. Reload the page.', 'warning', { title: 'Stale list' })
+    }
+  }
+
   useEffect(() => {
     let alive = true
     Promise.all([api.brands(), api.teams(), api.users(), api.accounts()])
-      .then(([b, t, u, a]) => { if (!alive) return; setBrands(b); setTeams(t); setUsers(u); setAccounts(a) })
+      .then(([b, t, u, a]) => {
+        if (!alive) return
+        setBrands(b); setTeams(t); setUsers(u); setAccounts(a)
+        loadBrandMembers(b)
+      })
       .catch(() => { if (alive) toast('Could not load the access matrix.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
@@ -73,26 +93,27 @@ export default function Brands() {
 
   const addBrand = async (e) => {
     e.preventDefault()
-    if (!form.domain.trim() || !form.name.trim() || !form.lead_id) {
-      toast('Domain, name and a team lead are required.', 'error', { title: 'Missing fields' })
+    if (!form.domain.trim() || !form.name.trim()) {
+      toast('Domain and name are required.', 'error', { title: 'Missing fields' })
       return
     }
     setSaving(true)
-    const leadId = Number(form.lead_id)
-    const lead = leadById(leadId)
-    const created = await api.createBrand({
-      domain: form.domain.trim(), name: form.name.trim(), lead_id: leadId,
-      lead_name: lead?.name || '', status: form.status,
-      team_id: teams.find(t => t.lead_id === leadId)?.id ?? null,
-      accounts: 0, users: teamMembers(leadId).length,
-    })
-    setBrands(prev => [...prev, created])
-    setExpanded(prev => new Set(prev).add(created.id))
-    setSaving(false)
-    setAddOpen(false)
-    setForm(emptyForm)
-    setTab('brands')
-    toast(`${created.domain} is now part of the access matrix.`, 'success', { title: 'Brand added' })
+    try {
+      const created = await api.createBrand({
+        domain: form.domain.trim(), name: form.name.trim(), status: form.status,
+        lead_id: form.lead_id ? Number(form.lead_id) : null,
+      })
+      await refreshBrands()
+      setExpanded(prev => new Set(prev).add(created.id))
+      setAddOpen(false)
+      setForm(emptyForm)
+      setTab('brands')
+      toast(`${created.domain} is now part of the access matrix.`, 'success', { title: 'Brand added' })
+    } catch (err) {
+      showError(err, 'Could not create the brand.', 'Create failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const showMatrix = (id) => {
@@ -103,9 +124,14 @@ export default function Brands() {
   const runPreview = async (account) => {
     if (!account) { setPreview(null); return }
     setPreviewLoading(true)
-    const res = await api.autoAssignPreview(account)
-    setPreview(res)
-    setPreviewLoading(false)
+    try {
+      setPreview(await api.autoAssignPreview(account))
+    } catch (err) {
+      setPreview(null)
+      showError(err, 'Could not run the auto-assign preview.', 'Preview failed')
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -156,7 +182,7 @@ export default function Brands() {
           {filtered.length === 0 && <Card><EmptyState icon={Search} title="No brands found" message="Try a different domain, name or team lead." /></Card>}
 
           {filtered.map(brand => {
-            const members = teamMembers(brand.lead_id)
+            const members = membersFor(brand)
             const accs = accountsForBrand(brand.domain)
             const open = expanded.has(brand.id)
             return (
@@ -168,19 +194,19 @@ export default function Brands() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold">{brand.domain}</span>
-                      <Badge variant="info">Lead: {brand.lead_name}</Badge>
+                      <Badge variant="info">Lead: {brand.lead_name || 'none'}</Badge>
                       <Badge variant={brand.status} dot>{brand.status}</Badge>
                     </div>
                     <p className="text-xs text-muted mt-0.5 truncate">{brand.name}</p>
                   </div>
                   <div className="hidden md:flex items-center gap-2 shrink-0">
                     <ArrowRight size={15} className="text-muted" />
-                    <div className="flex -space-x-2">
+                    {members.length > 0 && <div className="flex -space-x-2">
                       {members.slice(0, 4).map(m => (
                         <span key={m.id} className="rounded-full ring-2 ring-[var(--surface)]"><Avatar name={m.name} size="sm" /></span>
                       ))}
-                    </div>
-                    <span className="text-[11px] text-muted whitespace-nowrap">{members.length} members</span>
+                    </div>}
+                    <span className="text-[11px] text-muted whitespace-nowrap">{members.length || brand.users || 0} members</span>
                   </div>
                   <div className="hidden lg:flex items-center gap-2 shrink-0 max-w-[260px]">
                     <ArrowRight size={15} className="text-muted" />
@@ -202,16 +228,16 @@ export default function Brands() {
                         <Badge variant="primary"><ShieldCheck size={11} /> Auto-inherited</Badge>
                       </div>
                       <div className="flex items-center gap-3 pb-3 border-b border-app">
-                        <Avatar name={brand.lead_name} size="md" />
+                        {brand.lead_name && <Avatar name={brand.lead_name} size="md" />}
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold">{brand.lead_name}</p>
-                          <p className="text-[11px] text-muted truncate">{leadById(brand.lead_id)?.email}</p>
+                          <p className="text-sm font-semibold">{brand.lead_name || 'No lead configured'}</p>
+                          <p className="text-[11px] text-muted truncate">{brand.lead_id ? userById(brand.lead_id)?.email : 'No automatic assignments on this brand'}</p>
                         </div>
-                        <Badge role="team-lead">team-lead</Badge>
+                        {brand.lead_name && <Badge role="team-lead">team-lead</Badge>}
                       </div>
-                      <div className="flex items-center gap-2 py-2 text-[11px] text-indigo-500 font-semibold">
+                      {brand.lead_name && <div className="flex items-center gap-2 py-2 text-[11px] text-indigo-500 font-semibold">
                         <ArrowRight size={13} className="rotate-90" /> whole team inherits every mailbox
-                      </div>
+                      </div>}
                       <div className="space-y-1.5">
                         {members.map(m => (
                           <div key={m.id} className="flex items-center gap-2.5 rounded-lg hover:surface-2 px-1.5 py-1.5">
@@ -237,7 +263,7 @@ export default function Brands() {
                       ) : (
                         <div className="space-y-2">
                           {accs.map(a => {
-                            const names = (a.assigned || []).map(id => leadById(id)?.name).filter(Boolean)
+                            const names = (a.assigned || []).map(id => userById(id)?.name).filter(Boolean)
                             return (
                               <div key={a.id} className="rounded-lg surface border border-app p-3">
                                 <div className="flex items-center gap-2">
@@ -257,7 +283,7 @@ export default function Brands() {
                       )}
                     </div>
                     <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
-                      <span className="flex items-center gap-1.5"><Sparkles size={12} className="text-indigo-500" /> Rule: {brand.domain} → {brand.lead_name} → {String(brand.lead_name ?? '').split(' ')[0]}’s whole team gets all {brand.domain} mailboxes automatically.</span>
+                      <span className="flex items-center gap-1.5"><Sparkles size={12} className="text-indigo-500" /> Rule: {brand.domain} → {brand.lead_name ? `${brand.lead_name} → the lead's team gets all ${brand.domain} mailboxes automatically` : 'no lead configured, so no automatic assignments'}.</span>
                       {firstAccountId(brand) && <Link to={`/webmail/${firstAccountId(brand)}`} className="font-semibold text-indigo-500 hover:underline">Open Webmail →</Link>}
                     </div>
                   </div>
@@ -288,7 +314,7 @@ export default function Brands() {
                       </div>
                     </Td>
                     <Td>
-                      <div className="flex items-center gap-2"><Avatar name={brand.lead_name} size="sm" /><span className="text-xs font-medium">{brand.lead_name}</span></div>
+                      <div className="flex items-center gap-2">{brand.lead_name && <Avatar name={brand.lead_name} size="sm" />}<span className="text-xs font-medium">{brand.lead_name || '—'}</span></div>
                     </Td>
                     <Td><Badge variant="default"><UsersRound size={11} /> {teamFor(brand)?.name || '—'}</Badge></Td>
                     <Td className="font-medium">{brand.accounts}</Td>
@@ -316,19 +342,19 @@ export default function Brands() {
               <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3"><Globe2 size={18} /></div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted">Step 1 · Domain</p>
               <p className="text-sm font-semibold mt-1">A brand domain is registered</p>
-              <p className="text-xs text-muted mt-1.5">Add a domain such as xuz.com and pick the team lead who owns it.</p>
+              <p className="text-xs text-muted mt-1.5">Register a domain and optionally choose the team lead who owns it.</p>
             </CardBody></Card>
             <Card><CardBody>
               <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center mb-3"><ShieldCheck size={18} /></div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted">Step 2 · Lead</p>
               <p className="text-sm font-semibold mt-1">The lead is linked to the domain</p>
-              <p className="text-xs text-muted mt-1.5">Ali becomes the owner of every mailbox created on that domain.</p>
+              <p className="text-xs text-muted mt-1.5">When a lead is set, they own every mailbox created on that domain.</p>
             </CardBody></Card>
             <Card><CardBody>
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3"><UsersRound size={18} /></div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted">Step 3 · Whole team</p>
               <p className="text-sm font-semibold mt-1">Access is inherited automatically</p>
-              <p className="text-xs text-muted mt-1.5">No manual assignments — the entire team receives every mailbox on the domain.</p>
+              <p className="text-xs text-muted mt-1.5">With a lead, the team inherits the domain&apos;s mailboxes automatically; without one, no automatic assignment occurs.</p>
             </CardBody></Card>
           </div>
 
@@ -336,14 +362,16 @@ export default function Brands() {
             <CardHeader title="The rule" subtitle="This is the exact access rule the system applies." actions={<Badge variant="primary"><GitBranch size={11} /> Active</Badge>} />
             <CardBody>
               <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-                <CodeBlock>xuz.com → Ali → Ali&apos;s whole team gets all xuz.com mailboxes automatically</CodeBlock>
+                <CodeBlock>{brands.length
+                  ? brands.map(b => `${b.domain} → ${b.lead_name || 'no lead'} → ${b.lead_name ? `${membersFor(b).length || b.users || 0} members inherit ${accountsForBrand(b.domain).length} mailboxes` : 'no automatic assignments'}`).join('\n')
+                  : 'No brands configured.'}</CodeBlock>
               </div>
               <div className="mt-4 space-y-2">
                 {brands.map(b => (
                   <div key={b.id} className="flex flex-wrap items-center gap-2 text-xs surface-2 border border-app rounded-lg px-3 py-2">
                     <Badge variant="primary">{b.domain}</Badge><ArrowRight size={13} className="text-muted" />
-                    <Avatar name={b.lead_name} size="sm" /><span className="font-medium">{b.lead_name}</span><ArrowRight size={13} className="text-muted" />
-                    <span className="text-muted">{teamMembers(b.lead_id).length} team members inherit {accountsForBrand(b.domain).length} mailboxes</span>
+                    {b.lead_name && <Avatar name={b.lead_name} size="sm" />}<span className="font-medium">{b.lead_name || 'No lead'}</span><ArrowRight size={13} className="text-muted" />
+                    <span className="text-muted">{b.lead_name ? `${membersFor(b).length || b.users || 0} team members inherit ${accountsForBrand(b.domain).length} mailboxes` : 'no lead — no automatic assignments'}</span>
                     <Badge variant={b.status} className="ml-auto">{b.status}</Badge>
                   </div>
                 ))}
@@ -383,7 +411,7 @@ export default function Brands() {
                   <div className="surface-2 border border-app rounded-xl p-4">
                     <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">Assigned users</p>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {(preview.assigned || []).map(id => <Badge key={id} variant="success" className="text-[10px]">{leadById(id)?.name || `#${id}`}</Badge>)}
+                      {(preview.assigned || []).map(id => <Badge key={id} variant="success" className="text-[10px]">{userById(id)?.name || `#${id}`}</Badge>)}
                       {!(preview.assigned || []).length && <span className="text-xs text-muted">None</span>}
                     </div>
                   </div>
@@ -417,15 +445,15 @@ export default function Brands() {
         </>}
       >
         <form onSubmit={addBrand} className="space-y-4">
-          <Field label="Domain" required hint="e.g. xuz.com — mailboxes on this domain follow the auto-assign rule.">
+          <Field label="Domain" required hint="Mailboxes on this domain follow the auto-assign rule when a lead is set.">
             <Input value={form.domain} onChange={set('domain')} placeholder="newbrand.com" />
           </Field>
           <Field label="Brand name" required>
             <Input value={form.name} onChange={set('name')} placeholder="New Brand Publishing" />
           </Field>
-          <Field label="Team lead" required hint="Only users with the team-lead role can own a brand.">
+          <Field label="Team lead" hint="Optional — a brand without a lead has no automatic assignments.">
             <Select value={form.lead_id} onChange={set('lead_id')}>
-              <option value="">Select a team lead…</option>
+              <option value="">No team lead</option>
               {leads.map(l => <option key={l.id} value={l.id}>{l.name} · {l.email}</option>)}
             </Select>
           </Field>

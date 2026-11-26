@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  Ban, Check, Edit3, ExternalLink, Globe2, KeyRound,
+  Ban, Check, Edit3, ExternalLink, Globe2,
   Mail, Shield, ShieldCheck, Trash2, UserCheck, Users, X,
 } from 'lucide-react'
 import {
@@ -9,7 +9,7 @@ import {
   Input, Modal, PageHeader, Select, Table, Tabs, Td, Textarea, Th, Tr, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 const ROLE_LEVEL = { user: 1, 'team-lead': 2, admin: 3, 'super-admin': 4 }
 
@@ -35,18 +35,37 @@ export default function UserDetail() {
   const [reason, setReason] = useState('')
   const [form, setForm] = useState({ name: '', email: '', role: 'user', status: 'active', team_lead_id: '' })
 
+  const adoptUser = found => {
+    if (!found) return false
+    setUser(found)
+    setReason(found.suspension_reason || '')
+    setForm({ name: found.name, email: found.email, role: found.role, status: found.status, team_lead_id: found.team_lead_id ? String(found.team_lead_id) : '' })
+    return true
+  }
+  const showError = (err, fallback, title = 'Action failed') =>
+    toast(describeApiError(err, fallback), 'error', { title })
+  const lastLogin = value => {
+    if (!value) return '—'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
+  }
+  const refreshUser = async () => {
+    try {
+      const rows = await api.users()
+      setUsers(rows)
+      adoptUser(rows.find(x => String(x.id) === String(id)))
+    } catch {
+      toast('Saved on the server, but the profile could not be refreshed. Reload the page.', 'warning', { title: 'Stale profile' })
+    }
+  }
+
   useEffect(() => {
     let alive = true
     Promise.all([api.users(), api.accounts()])
       .then(([u, a]) => {
         if (!alive) return
         setUsers(u); setAccounts(a)
-        const found = u.find(x => String(x.id) === String(id))
-        if (found) {
-          setUser(found)
-          setReason(found.suspension_reason || '')
-          setForm({ name: found.name, email: found.email, role: found.role, status: found.status, team_lead_id: found.team_lead_id ? String(found.team_lead_id) : '' })
-        }
+        adoptUser(u.find(x => String(x.id) === String(id)))
       })
       .catch(() => { if (alive) toast('Could not load user.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
@@ -67,36 +86,48 @@ export default function UserDetail() {
     if (!form.name.trim() || !form.email.trim()) {
       toast('Name and email are required.', 'error', { title: 'Missing fields' }); return
     }
-    const lead = leads.find(l => String(l.id) === form.team_lead_id)
-    const payload = { ...form, name: form.name.trim(), email: form.email.trim(), team_lead_id: form.team_lead_id ? Number(form.team_lead_id) : null, team: lead?.team || (form.team_lead_id ? user?.team : '—') }
-    await api.updateUser(user.id, payload)
-    setUser(prev => ({ ...prev, ...payload }))
-    setEditOpen(false)
-    toast(`${form.name.trim()} updated.`, 'success', { title: 'User saved' })
+    try {
+      await api.updateUser(user.id, { name: form.name.trim(), email: form.email.trim(), role: form.role })
+      await refreshUser()
+      setEditOpen(false)
+      toast(`${form.name.trim()} updated.`, 'success', { title: 'User saved' })
+    } catch (err) {
+      showError(err, 'Could not save the user.', 'Update failed')
+    }
   }
 
   const toggleSuspend = async () => {
     if (user.status === 'active') { setReason(''); setSuspendOpen(true); return }
-    await api.unsuspendUser(user.id)
-    setUser(prev => ({ ...prev, status: 'active', suspension_reason: null }))
-    toast(`${user.name} is active again.`, 'success', { title: 'User unsuspended' })
+    try {
+      await api.unsuspendUser(user.id)
+      await refreshUser()
+      toast(`${user.name} is active again.`, 'success', { title: 'User unsuspended' })
+    } catch (err) {
+      showError(err, 'Could not unsuspend the user.', 'Unsuspend failed')
+    }
   }
 
   const applySuspend = async () => {
     const r = reason.trim() || 'Suspended by administrator'
-    await api.suspendUser(user.id, r)
-    setUser(prev => ({ ...prev, status: 'suspended', suspension_reason: r }))
-    setSuspendOpen(false)
-    toast(`${user.name} was suspended.`, 'warning', { title: 'User suspended' })
+    try {
+      await api.suspendUser(user.id, r)
+      await refreshUser()
+      setSuspendOpen(false)
+      toast(`${user.name} was suspended.`, 'warning', { title: 'User suspended' })
+    } catch (err) {
+      showError(err, 'Could not suspend the user.', 'Suspend failed')
+    }
   }
 
   const remove = async () => {
-    if (confirm === 'delete') {
-      const deleted_at = new Date().toISOString()
-      await api.updateUser(user.id, { deleted: true, deleted_at })
-      toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' }); navigate('/users')
+    if (confirm !== 'delete') { setConfirm(null); return }
+    try {
+      await api.deleteUser(user.id)
+      toast(`${user.name} moved to trash.`, 'success', { title: 'User deleted' })
+      navigate('/users')
+    } catch (err) {
+      showError(err, 'Could not delete the user.', 'Delete failed')
     }
-    else { toast('Role elevated to super-admin (demo).', 'info', { title: 'Permissions updated' }) }
     setConfirm(null)
   }
 
@@ -131,7 +162,7 @@ export default function UserDetail() {
                   <p className="text-xs text-muted truncate">{user.email}</p>
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     <Badge role={user.role} className="text-[10px]">{user.role}</Badge>
-                    <Badge variant={user.deleted ? 'danger' : user.status} dot className="text-[10px]">{user.deleted ? 'trashed' : user.status}</Badge>
+                    <Badge variant={user.deleted_at ? 'danger' : user.status} dot className="text-[10px]">{user.deleted_at ? 'trashed' : user.status}</Badge>
                     <Badge variant="primary" className="text-[10px]"><Globe2 size={10} /> {team}</Badge>
                   </div>
                 </div>
@@ -143,7 +174,7 @@ export default function UserDetail() {
                   ['Role', user.role],
                   ['Team', team],
                   ['Team lead', leads.find(l => l.id === user.team_lead_id)?.name || '—'],
-                  ['Last login', user.last_login],
+                  ['Last login', lastLogin(user.last_login)],
                   ['Accounts', String(assigned.length)],
                   ['Status', user.status],
                 ].map(([label, value]) => (
@@ -228,7 +259,6 @@ export default function UserDetail() {
           <Card>
             <CardHeader title="Danger zone" subtitle="Destructive account actions." />
             <CardBody className="space-y-2.5">
-              <Button variant="secondary" className="w-full justify-start" onClick={() => setConfirm('promote')}><KeyRound size={15} /> Elevate role</Button>
               <Button variant="danger" className="w-full justify-start" onClick={() => setConfirm('delete')}><Trash2 size={15} /> Delete user</Button>
             </CardBody>
           </Card>
@@ -262,10 +292,10 @@ export default function UserDetail() {
 
       <ConfirmDialog
         open={!!confirm}
-        title={confirm === 'delete' ? 'Delete this user?' : 'Elevate role?'}
-        message={confirm === 'delete' ? `${user.name} will be moved to trash and lose access immediately.` : `This grants ${user.name} elevated privileges in this demo.`}
-        confirmLabel={confirm === 'delete' ? 'Delete' : 'Elevate'}
-        danger={confirm === 'delete'}
+        title="Delete this user?"
+        message={`${user.name} will be moved to trash and lose access immediately.`}
+        confirmLabel="Delete"
+        danger
         onConfirm={remove}
         onClose={() => setConfirm(null)}
       />

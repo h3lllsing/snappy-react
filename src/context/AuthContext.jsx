@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
     if (liveEcho) return () => disconnectEcho()
     if (import.meta.env.VITE_USE_API !== 'true') return startDemoStream(onMail)
 
-    // Live demo against the real DB: poll the notification cursor endpoint.
+    // Live polling against the real API: poll the notification cursor endpoint.
     let alive = true
     let cursor = null
     const tick = async () => {

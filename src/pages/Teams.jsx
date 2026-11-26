@@ -1,14 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowUpRight, ChevronDown, Globe2, Mail, Plus, Search, UsersRound,
+  ArrowUpRight, ChevronDown, Globe2, Plus, Search, Trash2, UsersRound,
 } from 'lucide-react'
 import {
   Avatar, Badge, Button, Card, CardBody, EmptyState, Field, Input, Modal,
   PageHeader, Select, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
+
+// Only use member identities when the backend actually returns pivot rows.
+// The current /teams endpoint returns a count, not a member list.
+const pivotMemberIds = (team) => {
+  const raw = team?.members ?? team?.team_user ?? team?.pivot?.members ?? team?.pivot?.team_user
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map(m => (m && typeof m === 'object' ? (m.user_id ?? m.user?.id ?? m.id) : m))
+    .filter(v => v !== null && v !== undefined)
+    .map(Number)
+    .filter(Number.isFinite)
+}
 
 const emptyForm = { name: '', brand_id: '', lead_id: '' }
 
@@ -17,29 +29,39 @@ export default function Teams() {
   const [teams, setTeams] = useState([])
   const [brands, setBrands] = useState([])
   const [users, setUsers] = useState([])
-  const [accounts, setAccounts] = useState([])
   const [expanded, setExpanded] = useState(() => new Set())
   const [query, setQuery] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [memberIds, setMemberIds] = useState({})
+  const [memberPick, setMemberPick] = useState({})
 
-  const leadById = (id) => users.find(u => u.id === Number(id) || u.id === id)
-  const teamMembers = (leadId) => {
-    const lid = Number(leadId)
-    const teamIds = teams.filter(t => Number(t.lead_id) === lid).map(t => t.id)
-    return users.filter(u => {
-      const cand = u.lead_id ?? u.team_lead_id ?? u.manager_id ?? u.leadId ?? u.teamLeadId
-      if (cand != null && Number(cand) === lid) return true
-      if (u.team_id != null && teamIds.includes(Number(u.team_id))) return true
-      if (u.teamId != null && teamIds.includes(Number(u.teamId))) return true
-      return false
-    })
+  const showError = (err, fallback, title = 'Action failed') =>
+    toast(describeApiError(err, fallback), 'error', { title })
+  const reloadTeams = async () => {
+    try {
+      const rows = await api.teams()
+      setTeams(rows)
+      setMemberIds(prev => Object.fromEntries(rows.map(team => [team.id, prev[team.id] ?? pivotMemberIds(team)])))
+    } catch {
+      toast('Saved on the server, but teams could not be refreshed. Reload the page.', 'warning', { title: 'Stale list' })
+    }
   }
+  const knownMembers = team => users.filter(u => (memberIds[team.id] || []).includes(Number(u.id)))
+  const memberCount = team => {
+    const known = memberIds[team.id] || pivotMemberIds(team)
+    return known.length || Number(team.members) || 0
+  }
+
   useEffect(() => {
     let alive = true
-    Promise.all([api.teams(), api.brands(), api.users(), api.accounts()])
-      .then(([t, b, u, a]) => { if (!alive) return; setTeams(t); setBrands(b); setUsers(u); setAccounts(a) })
+    Promise.all([api.teams(), api.brands(), api.users()])
+      .then(([t, b, u]) => {
+        if (!alive) return
+        setTeams(t); setBrands(b); setUsers(u)
+        setMemberIds(Object.fromEntries(t.map(team => [team.id, pivotMemberIds(team)])))
+      })
       .catch(() => { if (alive) toast('Could not load teams.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
@@ -57,27 +79,61 @@ export default function Teams() {
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
 
+  const addMember = async team => {
+    const userId = Number(memberPick[team.id])
+    if (!userId) { toast('Choose a user to add.', 'error', { title: 'Missing user' }); return }
+    try {
+      const membership = await api.addTeamMember(team.id, userId)
+      const addedId = Number(membership?.user_id ?? userId)
+      setMemberIds(prev => ({
+        ...prev,
+        [team.id]: [...new Set([...(prev[team.id] || []), addedId])],
+      }))
+      setMemberPick(prev => ({ ...prev, [team.id]: '' }))
+      toast('Member added to the team.', 'success', { title: team.name })
+      await reloadTeams()
+    } catch (err) {
+      showError(err, 'Could not add the team member.', 'Add member failed')
+    }
+  }
+
+  const removeMember = async (team, userId) => {
+    try {
+      await api.removeTeamMember(team.id, userId)
+      setMemberIds(prev => ({
+        ...prev,
+        [team.id]: (prev[team.id] || []).filter(id => Number(id) !== Number(userId)),
+      }))
+      toast('Member removed from the team.', 'success', { title: team.name })
+      await reloadTeams()
+    } catch (err) {
+      showError(err, 'Could not remove the team member.', 'Remove member failed')
+    }
+  }
+
   const addTeam = async (e) => {
     e.preventDefault()
+    // The API validates lead_id as required, even though the column is nullable.
     if (!form.name.trim() || !form.brand_id || !form.lead_id) {
       toast('Name, brand and team lead are required.', 'error', { title: 'Missing fields' })
       return
     }
     setSaving(true)
-    const brand = brands.find(b => String(b.id) === form.brand_id)
-    const leadId = Number(form.lead_id)
-    const created = await api.createTeam({
-      name: form.name.trim(), brand_id: Number(form.brand_id),
-      brand: brand?.domain || '', lead_id: leadId,
-      lead_name: leadById(leadId)?.name || '',
-      members: teamMembers(leadId).length, accounts: brand?.accounts || 0,
-    })
-    setTeams(prev => [...prev, created])
-    setExpanded(prev => new Set(prev).add(created.id))
-    setSaving(false)
-    setAddOpen(false)
-    setForm(emptyForm)
-    toast(`${created.name} created with ${created.members} members.`, 'success', { title: 'Team added' })
+    try {
+      const created = await api.createTeam({
+        name: form.name.trim(), brand_id: Number(form.brand_id), lead_id: Number(form.lead_id),
+      })
+      setTeams(prev => [...prev, created])
+      setMemberIds(prev => ({ ...prev, [created.id]: pivotMemberIds(created) }))
+      setExpanded(prev => new Set(prev).add(created.id))
+      setAddOpen(false)
+      setForm(emptyForm)
+      toast(`${created.name} created with ${created.members ?? 0} members.`, 'success', { title: 'Team added' })
+    } catch (err) {
+      showError(err, 'Could not create the team.', 'Create failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -100,11 +156,9 @@ export default function Teams() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map(team => {
-          const members = teamMembers(team.lead_id)
+          const members = knownMembers(team)
+          const count = memberCount(team)
           const open = expanded.has(team.id)
-          const teamAccounts = accounts.filter(a =>
-            (a.assigned || []).some(id => members.some(m => m.id === id))
-          )
           return (
             <Card key={team.id} className="overflow-hidden card-hover">
               <div className="p-5">
@@ -118,9 +172,9 @@ export default function Teams() {
                       <Badge variant="primary"><Globe2 size={11} /> {team.brand}</Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <Avatar name={team.lead_name} size="sm" />
-                      <span className="text-xs text-muted">Led by <span className="font-semibold text-[var(--text)]">{team.lead_name}</span></span>
-                      <Badge role="team-lead" className="text-[10px]">lead</Badge>
+                      {team.lead_name && <Avatar name={team.lead_name} size="sm" />}
+                      <span className="text-xs text-muted">Led by <span className="font-semibold text-[var(--text)]">{team.lead_name || '—'}</span></span>
+                      {team.lead_name && <Badge role="team-lead" className="text-[10px]">lead</Badge>}
                     </div>
                   </div>
                 </div>
@@ -128,43 +182,49 @@ export default function Teams() {
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <div className="surface-2 border border-app rounded-xl p-3">
                     <p className="text-[11px] text-muted">Members</p>
-                    <p className="text-xl font-bold mt-0.5">{members.length}</p>
+                    <p className="text-xl font-bold mt-0.5">{count}</p>
                   </div>
                   <div className="surface-2 border border-app rounded-xl p-3">
                     <p className="text-[11px] text-muted">Mailboxes</p>
-                    <p className="text-xl font-bold mt-0.5">{teamAccounts.length || team.accounts}</p>
+                    <p className="text-xl font-bold mt-0.5">{team.accounts ?? 0}</p>
                   </div>
                 </div>
 
                 <button onClick={() => toggle(team.id)} className="w-full flex items-center justify-between mt-4 pt-3 border-t border-app text-xs font-semibold text-indigo-500 hover:text-indigo-400">
                   <span className="flex items-center gap-2">
-                    <span className="flex -space-x-2">
+                    {members.length > 0 && <span className="flex -space-x-2">
                       {members.slice(0, 4).map(m => (
                         <span key={m.id} className="rounded-full ring-2 ring-[var(--surface)]"><Avatar name={m.name} size="sm" /></span>
                       ))}
-                    </span>
+                    </span>}
                     {open ? 'Hide members' : 'Show members'}
                   </span>
                   <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
                 </button>
 
                 {open && (
-                  <div className="mt-3 space-y-1.5 animate-fade-up">
-                    {members.map(m => {
-                      const assigned = accounts.filter(a => (a.assigned || []).includes(m.id) && teamAccounts.some(t => t.id === a.id))
-                      return (
-                        <div key={m.id} className="flex items-center gap-2.5 rounded-lg surface-2 border border-app px-2.5 py-2">
-                          <Avatar name={m.name} size="sm" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold truncate">{m.name}</p>
-                            <p className="text-[10px] text-muted truncate">{m.email}</p>
-                          </div>
-                          <Badge role={m.role} className="text-[10px]">{m.role}</Badge>
-                          <Badge variant={m.status} className="text-[10px]">{m.status}</Badge>
-                          <span className="text-[10px] text-muted flex items-center gap-1 whitespace-nowrap" title={assigned.map(a => a.email).join(', ')}><Mail size={11} /> {assigned.length}</span>
+                  <div className="mt-3 space-y-2 animate-fade-up">
+                    {members.length === 0 && (
+                      <p className="text-[11px] text-muted">The API exposes a member count only; member identities appear here when returned by the backend or added from this screen.</p>
+                    )}
+                    {members.map(m => (
+                      <div key={m.id} className="flex items-center gap-2.5 rounded-lg surface-2 border border-app px-2.5 py-2">
+                        <Avatar name={m.name} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold truncate">{m.name}</p>
+                          <p className="text-[10px] text-muted truncate">{m.email}</p>
                         </div>
-                      )
-                    })}
+                        <Badge role={m.role} className="text-[10px]">{m.role}</Badge>
+                        <Button size="sm" variant="ghost" title="Remove member" onClick={() => removeMember(team, m.id)}><Trash2 size={13} className="text-red-500" /></Button>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2 pt-1">
+                      <Select value={memberPick[team.id] || ''} onChange={e => setMemberPick(prev => ({ ...prev, [team.id]: e.target.value }))} className="flex-1">
+                        <option value="">Select a user to add…</option>
+                        {users.filter(u => !u.deleted_at).map(u => <option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
+                      </Select>
+                      <Button size="sm" onClick={() => addMember(team)}><Plus size={13} /> Add member</Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -197,7 +257,7 @@ export default function Teams() {
               {brands.map(b => <option key={b.id} value={b.id}>{b.domain} · {b.name}</option>)}
             </Select>
           </Field>
-          <Field label="Team lead" required>
+          <Field label="Team lead" required hint="The API currently requires a lead, even though the database column is nullable.">
             <Select value={form.lead_id} onChange={set('lead_id')}>
               <option value="">Select a team lead…</option>
               {leads.map(l => <option key={l.id} value={l.id}>{l.name} · {l.email}</option>)}

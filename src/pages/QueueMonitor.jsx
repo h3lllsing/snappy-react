@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, RotateCcw, Search, Trash2, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, RotateCcw, Search, Zap } from 'lucide-react'
 import {
   Badge, Button, Card, CodeBlock, EmptyState, Input, PageHeader,
   StatCard, Table, Td, Th, Tr, useToast,
@@ -11,6 +11,7 @@ export default function QueueMonitor() {
   const toast = useToast()
   const [jobs, setJobs] = useState([])
   const [pending, setPending] = useState(0)
+  const [failed, setFailed] = useState(0)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState([])
   const [busy, setBusy] = useState(false)
@@ -18,10 +19,27 @@ export default function QueueMonitor() {
   useEffect(() => {
     let alive = true
     Promise.all([api.failedJobs(), api.opsSummary()])
-      .then(([j, s]) => { if (alive) { setJobs(j); setPending(s?.queue_depth || 0) } })
+      .then(([j, s]) => {
+        if (alive) {
+          setJobs(j)
+          setPending(s?.queue_depth ?? 0)
+          setFailed(s?.failed_jobs ?? 0)
+        }
+      })
       .catch(() => { if (alive) toast('Could not load the queue.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
+
+  // Counts are server-authoritative; never derive them from local list edits.
+  const refreshCounts = async () => {
+    try {
+      const s = await api.opsSummary()
+      setPending(s?.queue_depth ?? 0)
+      setFailed(s?.failed_jobs ?? 0)
+    } catch {
+      toast('Could not refresh queue counts.', 'warning', { title: 'Counts stale' })
+    }
+  }
 
   const filtered = useMemo(() => jobs.filter(j =>
     !query || `${j.job} ${j.queue} ${j.error}`.toLowerCase().includes(query.toLowerCase()),
@@ -34,17 +52,11 @@ export default function QueueMonitor() {
       await api.retryJob(job.id)
       setJobs(prev => prev.filter(j => j.id !== job.id))
       setExpanded(prev => prev.filter(x => x !== job.id))
-      setPending(p => p + 1)
+      await refreshCounts()
       toast(`${job.job} was requeued.`, 'success', { title: 'Job retried' })
     } catch {
       toast('Could not retry this job.', 'error', { title: 'Retry failed' })
     }
-  }
-
-  const remove = job => {
-    setJobs(prev => prev.filter(j => j.id !== job.id))
-    setExpanded(prev => prev.filter(x => x !== job.id))
-    toast(`${job.job} removed from the failed list.`, 'warning', { title: 'Job removed' })
   }
 
   const retryAll = async () => {
@@ -56,14 +68,14 @@ export default function QueueMonitor() {
         catch { return { id: j.id, ok: false } }
       }))
       const succeeded = results.filter(r => r.ok).map(r => r.id)
-      const failed = results.length - succeeded.length
+      const failedCount = results.length - succeeded.length
       if (succeeded.length) {
         setJobs(prev => prev.filter(j => !succeeded.includes(j.id)))
         setExpanded(prev => prev.filter(id => !succeeded.includes(id)))
-        setPending(p => p + succeeded.length)
+        await refreshCounts()
       }
-      if (failed) {
-        toast(`${succeeded.length} requeued, ${failed} could not be retried.`, 'warning', { title: 'Retry all partial' })
+      if (failedCount) {
+        toast(`${succeeded.length} requeued, ${failedCount} could not be retried.`, 'warning', { title: 'Retry all partial' })
       } else {
         toast(`${jobs.length} failed job${jobs.length === 1 ? '' : 's'} requeued across the sync queue.`, 'success', { title: 'Retry all complete' })
       }
@@ -89,7 +101,7 @@ export default function QueueMonitor() {
 
       <div className="grid gap-4 sm:grid-cols-2 mb-5">
         <StatCard label="Pending jobs" value={pending} icon={Zap} tone="indigo" sub="Awaiting a worker in the sync queue" />
-        <StatCard label="Failed jobs" value={jobs.length} icon={RotateCcw} tone="red" sub={jobs.length ? 'Require attention' : 'Queue is healthy'} />
+        <StatCard label="Failed jobs" value={failed} icon={RotateCcw} tone="red" sub={failed ? 'Require attention' : 'Queue is healthy'} />
       </div>
 
       <div className="sm:hidden mb-4">
@@ -102,7 +114,7 @@ export default function QueueMonitor() {
       <Card className="p-0 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-app">
           <h3 className="font-semibold">Failed jobs</h3>
-          <Badge variant={jobs.length ? 'danger' : 'success'} dot>{jobs.length ? `${jobs.length} failed` : 'All clear'}</Badge>
+          <Badge variant={failed ? 'danger' : 'success'} dot>{failed ? `${failed} failed` : 'All clear'}</Badge>
         </div>
         <Table className="min-w-[800px]">
           <thead><tr>
@@ -126,7 +138,6 @@ export default function QueueMonitor() {
                     <Td>
                       <div className="flex items-center justify-end gap-1.5">
                         <Button size="sm" variant="secondary" onClick={() => retry(j)}><RotateCcw size={13} /> Retry</Button>
-                        <Button size="sm" variant="ghost" title="Remove" onClick={() => remove(j)}><Trash2 size={14} className="text-red-500" /></Button>
                       </div>
                     </Td>
                   </Tr>
@@ -138,7 +149,7 @@ export default function QueueMonitor() {
                         <div className="flex gap-4 mt-2 text-[11px] text-muted">
                           <span>Job ID: <span className="font-mono">#{j.id}</span></span>
                           <span>Queue: <span className="font-mono">{j.queue}</span></span>
-                          <span>Attempts: <span className="font-mono">3 / 3</span></span>
+                          <span>Attempts: <span className="font-mono">{j.attempts ?? '—'}</span></span>
                         </div>
                       </td>
                     </Tr>

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Activity, AlertTriangle, ArrowDownLeft, ArrowUpRight, Check, Clock, Inbox, Play, RefreshCw, Server, ShieldAlert, Wrench } from 'lucide-react'
-import { Alert, Badge, Button, Card, CardBody, CardHeader, Modal, PageHeader, StatCard, Table, Td, Th, Tr, useToast } from '../components/ui'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Activity, AlertTriangle, ArrowDownLeft, ArrowUpRight, Check, Clock, Inbox, Play, RefreshCw, Server, ShieldAlert, UserPlus, Wrench, X } from 'lucide-react'
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, Modal, PageHeader, StatCard, Table, Td, Th, Tr, useToast } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
+import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
 
 // Accept both the legacy bare-array responses and paginated envelopes.
@@ -19,6 +20,8 @@ const cursorOf = (payload) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+const errorText = (error, fallback) => error?.message || fallback
+
 const EMPTY_SUMMARY = {
   accounts: 0, online: 0, syncing: 0, paused: 0, open_issues: 0,
   received_today: 0, sent_today: 0, pushed_today: 0, queue_depth: 0,
@@ -27,6 +30,8 @@ const EMPTY_SUMMARY = {
 
 export default function OpsConsole() {
   const toast = useToast()
+  const { user } = useAuth()
+  const pollFailures = useRef(0)
   const [summary, setSummary] = useState(EMPTY_SUMMARY)
   const [runs, setRuns] = useState([])
   const [issues, setIssues] = useState([])
@@ -35,6 +40,8 @@ export default function OpsConsole() {
   const [loading, setLoading] = useState(false)
   const [timeline, setTimeline] = useState(null)
   const [cursor, setCursor] = useState(0)
+  const [assignTarget, setAssignTarget] = useState(null)
+  const [ownerId, setOwnerId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -46,7 +53,7 @@ export default function OpsConsole() {
       setRuns(rowsOf(r))
       setIssues(rowsOf(i))
       setMail(rowsOf(m))
-    } catch { toast('Ops data unavailable.', 'error') }
+    } catch (error) { toast(`Ops data unavailable: ${errorText(error, 'Request failed')}`, 'error') }
     finally { setLoading(false) }
   }, [toast, direction])
 
@@ -65,25 +72,51 @@ export default function OpsConsole() {
         } else if (nextCursor !== null && nextCursor > cursor) {
           setCursor(nextCursor)
         }
-      } catch { /* poll fallback */ }
+        pollFailures.current = 0
+      } catch (error) {
+        pollFailures.current += 1
+        // One toast per failing streak instead of one per 30-second poll.
+        if (pollFailures.current === 2) {
+          toast(`Ops stream polling failed: ${errorText(error, 'Request failed')}`, 'error', { title: 'Polling' })
+        }
+      }
     }, 30000)
     return () => clearInterval(id)
   }, [cursor, load])
 
-  const act = async (id, action, label) => {
+  const act = async (id, action, payload = {}) => {
     const fn = {
       ack: api.acknowledgeIssue, resolve: api.resolveIssue, start: api.startIssue,
       assign: api.assignIssue, snooze: api.snoozeIssue, close: api.closeIssue,
     }[action]
     try {
-      await fn(id, label ? { note: label } : {})
+      await fn(id, payload)
       toast(`Issue #${id}: ${action}`, 'success')
       load()
-    } catch { toast('Action failed.', 'error') }
+      return true
+    } catch (error) {
+      toast(`Issue #${id}: ${action} failed — ${errorText(error, 'Action failed')}`, 'error', { title: 'Action failed' })
+      return false
+    }
+  }
+
+  const openAssign = (id) => {
+    setOwnerId(user?.id !== null && user?.id !== undefined ? String(user.id) : '')
+    setAssignTarget(id)
+  }
+
+  const submitAssignment = async () => {
+    const parsed = Number(ownerId)
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      toast('owner_id must be a positive user id.', 'error', { title: 'Assign issue' })
+      return
+    }
+    if (await act(assignTarget, 'assign', { owner_id: parsed })) setAssignTarget(null)
   }
 
   const openTimeline = async (id) => {
-    try { setTimeline(await api.opsIssueTimeline(id)) } catch { toast('Timeline unavailable.', 'error') }
+    try { setTimeline(await api.opsIssueTimeline(id)) }
+    catch (error) { toast(`Timeline unavailable: ${errorText(error, 'Request failed')}`, 'error') }
   }
 
   const toggleMaintenance = async () => {
@@ -92,7 +125,7 @@ export default function OpsConsole() {
       else await api.enterMaintenance({ reason: 'Operator maintenance' })
       toast(summary.maintenance ? 'Maintenance exited' : 'Maintenance entered', 'warning')
       load()
-    } catch { toast('Maintenance toggle failed.', 'error') }
+    } catch (error) { toast(`Maintenance toggle failed: ${errorText(error, 'Request failed')}`, 'error') }
   }
 
   return (
@@ -122,7 +155,7 @@ export default function OpsConsole() {
               <thead><tr><Th>Account</Th><Th>Outcome</Th><Th>Fetched</Th><Th>Duration</Th><Th>When</Th></tr></thead>
               <tbody>{runs.map(r => (
                 <Tr key={r.id}>
-                  <Td className="text-xs font-semibold">{r.account}</Td>
+                  <Td className="text-xs font-semibold">{r.email ?? r.email_account_id ?? '—'}</Td>
                   <Td><Badge variant={r.outcome === 'success' ? 'success' : 'danger'}>{r.outcome}</Badge></Td>
                   <Td>{r.emails_fetched}</Td><Td className="text-xs text-muted">{r.duration_ms} ms</Td>
                   <Td className="text-xs text-muted">{r.started_at}</Td>
@@ -165,20 +198,38 @@ export default function OpsConsole() {
                   <Badge variant="default">{issue.status}</Badge>
                   <span className="text-xs font-mono text-muted">{issue.error_code}</span>
                 </div>
-                <p className="text-sm font-semibold mt-1.5 truncate">{issue.account} · {issue.brand}</p>
+                <p className="text-sm font-semibold mt-1.5 truncate">{issue.account ?? issue.email_account_id ?? '—'} · {issue.brand ?? issue.brand_id ?? '—'}</p>
                 <p className="text-xs text-muted">{issue.remediation_hint} <span className="text-indigo-500">{issue.runbook_url}</span></p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {issue.status === 'open' && <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'ack')}><Check size={13} /> Ack</Button>}
+                <Button size="sm" variant="secondary" onClick={() => openAssign(issue.id)}><UserPlus size={13} /> Assign</Button>
                 <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'start')}><Play size={13} /> Start</Button>
                 <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'snooze')}><Clock size={13} /> Snooze</Button>
                 <Button size="sm" variant="secondary" onClick={() => openTimeline(issue.id)}><Clock size={13} /> Timeline</Button>
-                <Button size="sm" variant="success" onClick={() => act(issue.id, 'resolve', 'Resolved from Ops Console')}><Check size={13} /> Resolve</Button>
+                <Button size="sm" variant="success" onClick={() => act(issue.id, 'resolve', { note: 'Resolved from Ops Console' })}><Check size={13} /> Resolve</Button>
+                {issue.status !== 'closed' && <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'close')}><X size={13} /> Close</Button>}
               </div>
             </div>
           ))}
         </CardBody>
       </Card>
+
+      <Modal
+        open={assignTarget !== null}
+        onClose={() => setAssignTarget(null)}
+        title={assignTarget !== null ? `Assign issue #${assignTarget}` : 'Assign issue'}
+        size="sm"
+        footer={<>
+          <Button variant="secondary" onClick={() => setAssignTarget(null)}>Cancel</Button>
+          <Button onClick={submitAssignment}>Assign</Button>
+        </>}
+      >
+        <Field label="Owner ID" required hint="Defaults to your user id; enter the id of an eligible admin or brand lead.">
+          <Input type="number" min="1" value={ownerId} onChange={e => setOwnerId(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submitAssignment() }} placeholder="user id" autoFocus />
+        </Field>
+      </Modal>
 
       <div className="grid md:grid-cols-4 gap-3 mt-5 text-xs text-muted">
         <span><Activity size={13} className="inline text-indigo-500" /> Queue depth: {summary.queue_depth}</span>

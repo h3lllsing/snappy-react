@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Search, ShieldCheck, Trash2 } from 'lucide-react'
+import { CalendarDays, Search, ShieldCheck } from 'lucide-react'
 import {
-  Badge, Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Pagination,
+  Badge, Button, Card, EmptyState, Input, PageHeader, Pagination,
   Select, Table, Td, Th, Tr, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
@@ -12,8 +12,9 @@ const EVENT_META = {
   login_failed: { label: 'failed', variant: 'danger' },
   logout: { label: 'logout', variant: 'default' },
 }
-const EVENT_DATES = { 1: '2026-11-22', 2: '2026-11-22', 3: '2026-11-21', 4: '2026-11-20' }
 const PAGE_SIZE = 3
+
+const rowDate = row => String(row?.time || row?.created_at || '').slice(0, 10)
 
 export default function LoginAudits() {
   const toast = useToast()
@@ -22,7 +23,6 @@ export default function LoginAudits() {
   const [event, setEvent] = useState('')
   const [date, setDate] = useState('')
   const [page, setPage] = useState(1)
-  const [confirm, setConfirm] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -34,7 +34,7 @@ export default function LoginAudits() {
 
   const filtered = useMemo(() => rows.filter(r => {
     if (event && r.event !== event) return false
-    if (date && (EVENT_DATES[r.id] || '') !== date) return false
+    if (date && rowDate(r) !== date) return false
     if (query && !`${r.user} ${r.email} ${r.ip} ${r.event}`.toLowerCase().includes(query.toLowerCase())) return false
     return true
   }), [rows, event, date, query])
@@ -45,13 +45,6 @@ export default function LoginAudits() {
   const safePage = Math.min(page, lastPage)
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
   const hasFilters = !!(query || event || date)
-
-  const deleteRow = () => {
-    if (!confirm) return
-    setRows(prev => prev.filter(r => r.id !== confirm.id))
-    toast(`Audit entry #${confirm.id} deleted.`, 'success', { title: 'Record removed' })
-    setConfirm(null)
-  }
 
   return (
     <div className="animate-fade-up">
@@ -83,7 +76,7 @@ export default function LoginAudits() {
       <Card className="p-0 overflow-hidden">
         <Table className="min-w-[720px]">
           <thead><tr>
-            <Th>User</Th><Th>Email</Th><Th>Event</Th><Th>IP address</Th><Th>Time</Th><Th className="text-right">Action</Th>
+            <Th>User</Th><Th>Email</Th><Th>Event</Th><Th>IP address</Th><Th>Time</Th>
           </tr></thead>
           <tbody>
             {pageRows.map(r => {
@@ -94,29 +87,17 @@ export default function LoginAudits() {
                   <Td className="text-muted">{r.email}</Td>
                   <Td><Badge variant={meta.variant} dot={r.event === 'login_success' ? 'live' : false}>{meta.label}</Badge></Td>
                   <Td><span className="font-mono text-xs text-muted">{r.ip}</span></Td>
-                  <Td className="text-xs text-muted whitespace-nowrap">{r.time}</Td>
-                  <Td className="text-right">
-                    <Button size="sm" variant="ghost" title="Delete entry" onClick={() => setConfirm(r)}><Trash2 size={14} className="text-red-500" /></Button>
-                  </Td>
+                  <Td className="text-xs text-muted whitespace-nowrap">{r.time || r.created_at || '—'}</Td>
                 </Tr>
               )
             })}
-            {pageRows.length === 0 && <EmptyState icon={ShieldCheck} title="No audits found" message={hasFilters ? 'Try a different search or date.' : 'Login attempts will be recorded here.'} colspan={6} />}
+            {pageRows.length === 0 && <EmptyState icon={ShieldCheck} title="No audits found" message={hasFilters ? 'Try a different search or date.' : 'Login attempts will be recorded here.'} colspan={5} />}
           </tbody>
         </Table>
       </Card>
 
       <Pagination page={safePage} lastPage={lastPage} total={filtered.length}
         from={(safePage - 1) * PAGE_SIZE + 1} to={Math.min(safePage * PAGE_SIZE, filtered.length)} onPage={setPage} />
-
-      <ConfirmDialog
-        open={!!confirm}
-        title="Delete audit entry?"
-        message={confirm ? `This will remove the ${confirm.event} record for ${confirm.email} (${confirm.ip}) from the local audit list.` : ''}
-        confirmLabel="Delete"
-        onClose={() => setConfirm(null)}
-        onConfirm={deleteRow}
-      />
     </div>
   )
 }

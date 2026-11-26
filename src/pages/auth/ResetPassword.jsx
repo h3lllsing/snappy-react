@@ -73,7 +73,7 @@ export default function ResetPassword() {
               <form onSubmit={submit} className="space-y-4">
                 <input type="hidden" name="token" value={token || ''} />
                 <p className="text-[11px] text-muted">
-                  Reset token: <span className="font-mono text-[var(--text)]">{token ? `${token.slice(0, 16)}${token.length > 16 ? '…' : ''}` : 'not provided (demo mode)'}</span>
+                  Reset token: <span className="font-mono text-[var(--text)]">{token ? `${token.slice(0, 16)}${token.length > 16 ? '…' : ''}` : 'not provided'}</span>
                 </p>
                 <Field label="Email address" required>
                   <div className="relative">

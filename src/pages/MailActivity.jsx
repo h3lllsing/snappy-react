@@ -18,7 +18,7 @@ const ACTION_VARIANT = {
 
 const display = v => (v === null || v === undefined || v === '' ? '—' : String(v))
 
-// The API can return a bare array (legacy) or a paginated envelope.
+// The API returns { data, next_cursor }; accept a bare array from legacy aliases.
 const pageOf = (payload) => {
   if (Array.isArray(payload)) return { rows: payload, nextCursor: null }
   const rows = Array.isArray(payload?.data) ? payload.data
@@ -40,13 +40,19 @@ export default function MailActivity() {
     setLoading(true)
     try {
       const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
-      if (append && cursorRef.current) params.cursor = cursorRef.current
+      if (!append) {
+        cursorRef.current = null
+        setNextCursor(null)
+      } else if (cursorRef.current) {
+        // next_cursor is an opaque "occurred_at,id" value consumed by the API.
+        params.cursor = cursorRef.current
+      }
       const page = pageOf(await api.mailActivity(params))
       cursorRef.current = page.nextCursor
       setNextCursor(page.nextCursor)
       setRows(previous => append ? [...previous, ...page.rows] : page.rows)
-    } catch {
-      toast('Mail activity report unavailable.', 'error', { title: 'Report' })
+    } catch (error) {
+      toast(error?.message || 'Mail activity report unavailable.', 'error', { title: 'Report' })
     } finally {
       setLoading(false)
     }

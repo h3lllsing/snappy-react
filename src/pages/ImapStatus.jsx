@@ -6,7 +6,7 @@ import {
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api from '../lib/api'
 
-const STATUS_VARIANT = { connected: 'success', paused: 'paused', failed: 'danger', error: 'error', syncing: 'info' }
+const STATUS_VARIANT = { connected: 'success', paused: 'paused', reconnecting: 'warning', failed: 'danger', error: 'error', syncing: 'info' }
 
 export default function ImapStatus() {
   const toast = useToast()
@@ -15,22 +15,26 @@ export default function ImapStatus() {
   const [lastPoll, setLastPoll] = useState(null)
   const [now, setNow] = useState(Date.now())
 
-  const load = useCallback((notify = false) => {
+  const load = useCallback(({ notify = false, initial = false } = {}) => {
     setBusy(true)
     return api.imapStatus()
       .then(r => {
         setRows(r)
         setLastPoll(Date.now())
         setNow(Date.now())
-        if (notify) toast('IMAP status refreshed from the local mirror.', 'success', { title: 'Status updated' })
+        if (notify) toast('IMAP status refreshed from the local DB mirror.', 'success', { title: 'Status updated' })
       })
-      .catch(() => { if (notify) toast('Could not refresh IMAP status.', 'error', { title: 'Refresh failed' }) })
+      .catch(error => {
+        if (notify || initial) {
+          toast(`Could not ${initial ? 'load' : 'refresh'} IMAP status: ${error?.message || 'Request failed'}`, 'error', { title: initial ? 'Load failed' : 'Refresh failed' })
+        }
+      })
       .finally(() => setBusy(false))
   }, [toast])
 
   useEffect(() => {
-    load()
-    const pollTimer = setInterval(() => load(true), 30000)
+    load({ initial: true })
+    const pollTimer = setInterval(() => load({ notify: true }), 30000)
     const tickTimer = setInterval(() => setNow(Date.now()), 1000)
     return () => { clearInterval(pollTimer); clearInterval(tickTimer) }
   }, [load])
@@ -50,7 +54,7 @@ export default function ImapStatus() {
       <PageHeader
         title="IMAP Status"
         subtitle="Live connection health of every configured mailbox account."
-        actions={<Button onClick={() => load(true)} loading={busy}><RefreshCw size={15} /> Refresh</Button>}
+        actions={<Button onClick={() => load({ notify: true })} loading={busy}><RefreshCw size={15} /> Refresh</Button>}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-5">
@@ -65,7 +69,7 @@ export default function ImapStatus() {
           <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
         </span>
-        Auto-refresh enabled — polling the local IMAP mirror (loopback) every 30 seconds. Last poll {heartbeat}.
+        Auto-refresh every 30 seconds — this page reads the local DB mirror synced from real IMAP. Last poll {heartbeat}.
       </div>
 
       <Card className="p-0 overflow-hidden">

@@ -99,7 +99,7 @@ export default function Profile() {
                 </div>
 
                 <Alert type="info">
-                  Reference to BE optimistic lock (hidden updated_at field) — the backend will use it to prevent conflicting updates. Local demo only.
+                  The hidden updated_at field is the optimistic concurrency token accepted by the API to prevent conflicting updates.
                 </Alert>
 
                 <Divider label="Change password" />
