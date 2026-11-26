@@ -29,6 +29,7 @@ export default function Webmail() {
   const [accessData, setAccessData] = useState({ scope: 'assigned', domains: [] })
   const [unavailable, setUnavailable] = useState(false)
   const [ssoError, setSsoError] = useState(null)
+  const [frameSrc, setFrameSrc] = useState('/webmail/')
   const [fullscreen, setFullscreen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [switcherQuery, setSwitcherQuery] = useState('')
@@ -162,6 +163,7 @@ export default function Webmail() {
   // then POST it to the bridge which redirects the iframe into an authenticated session.
   const startSso = async (a, seq = selectionSeq.current) => {
     if (!a) return
+    if (seq !== selectionSeq.current) return
     if (ssoDone.current === a.id) return
     setSsoError(null)
     try {
@@ -169,22 +171,39 @@ export default function Webmail() {
       if (seq !== selectionSeq.current) return
       const form = formRef.current
       if (!form || !res?.token) throw new Error('No SSO token')
+
+      // Drop the live SnappyMail JS context before logout/SSO. Otherwise it can
+      // keep a stale AppData System.token and fail later X-SM-Token requests
+      // with "Folders error: HTTP Token mismatch".
+      setFrameSrc('about:blank')
+      // On a second switch frameSrc is already 'about:blank', so React would
+      // not re-write the src attribute; force the navigation as well.
+      try {
+        frameRef.current?.contentWindow?.location.replace('about:blank')
+      } catch (e) {
+        // Ignore transient access errors; the state update still applies.
+      }
+
       try {
         await fetch('/webmail/portal-sso.php?logout=1', { method: 'POST' })
       } catch (e) {
-        // ignore failure
+        // Ignore logout failure; the fresh SSO session replaces it.
       }
       if (seq !== selectionSeq.current) return
+
       form.elements.t.value = res.token
       form.submit()
       ssoDone.current = a.id
-      setSsoError(null)
+      // Do NOT reset frameSrc to '/webmail/' here: the bridge POST redirects
+      // this same iframe to /webmail/?sso&hash=... and a second load would
+      // race the SSO navigation.
     } catch (err) {
       if (seq === selectionSeq.current) {
         ssoDone.current = null
+        setFrameSrc('/webmail/')
         setSsoError(err?.message || 'Could not start webmail session.')
+        toast(err?.message || 'Could not start webmail session.', 'error', { title: 'SnappyMail SSO' })
       }
-      toast(err?.message || 'Could not start webmail session.', 'error', { title: 'SnappyMail SSO' })
     }
   }
 
@@ -427,8 +446,7 @@ export default function Webmail() {
         <iframe
           ref={frameRef}
           name="snappyFrame"
-          key={account ? account.id : 'empty'}
-          src="/webmail/"
+          src={frameSrc}
           title={`SnappyMail — ${account ? account.email : 'real webmail'}`}
           className={fullscreen
             ? 'w-full h-full block border-0 bg-[#0b0b10]'
