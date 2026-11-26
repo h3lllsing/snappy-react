@@ -120,6 +120,58 @@ const CONTENT = {
         ],
       },
       {
+        id: 'brands-teams-users',
+        title: 'Brands, Teams & User Management',
+        groups: [
+          {
+            title: 'Brands & Access Matrix (/brands)',
+            items: [
+              '`brands` table fields: `domain`, `name`, `status`, `lead_id`, `team_id`, `created_by`.',
+              'Purpose: access policy per domain following the chain `domain → team lead → team → mailboxes`.',
+              'Auto-assign preview calls `POST /api/email-accounts/auto-assign-preview` and shows which users would receive access, from real backend data.',
+              'Current state: one brand `alphatach.com` with `lead_id` NULL and `team_id` NULL (no lead/team configured yet).',
+            ],
+          },
+          {
+            title: 'Teams (/teams)',
+            items: [
+              '`teams` table fields: `name`, `brand_id`, `lead_id`; members are stored in the `team_user` pivot (`role=member`, `added_by`).',
+              'Creating a team requires `brand_id` and `lead_id`.',
+              'Member add/remove is wired to `POST /api/teams/{id}/members` and `DELETE /api/teams/{id}/members/{userId}`.',
+              'Known limitation: the FE lead dropdown lists only users with role `team-lead`; with only a super-admin present, a team cannot be created from the UI until a `team-lead` user exists.',
+            ],
+          },
+          {
+            title: 'Team Overview (/team-overview)',
+            items: [
+              'Read-only aggregated view of teams, members and assigned mailboxes.',
+              'Admin sees all teams; a normal user sees only teams where they are the lead.',
+              'Known limitation: member identities are still derived from user fields (`lead_id`/`team_id`) rather than the `team_user` pivot, so the displayed member list can be inaccurate even when pivot rows exist.',
+            ],
+          },
+          {
+            title: 'User Management (/users)',
+            items: [
+              'Roles: `super-admin` (everything), `admin` (operations), `team-lead` (own team), `user` (only assigned mailboxes).',
+              'Actions: create user (`name`/`email`/`password`/`role`), edit `name`/`email`/`role`, suspend, unsuspend, soft delete (Trash), restore, force delete, bulk actions.',
+              'Mailbox assignment happens on the Accounts page via `email_account_user` with `can_send` and `can_receive` flags.',
+              'Current state: both real accounts (`i.T@alphatach.com` and `it.support@alphatach.com`) are assigned to the `super-admin` user with `can_send=1` and `can_receive=1`, so new-mail notifications currently go to that admin.',
+            ],
+          },
+          {
+            title: 'Recommended setup order',
+            numbered: true,
+            items: [
+              'Create a user with role `team-lead` in `/users`.',
+              'Set that lead on the `alphatach.com` brand in `/brands` (or create a new brand).',
+              'Create a team under the brand in `/teams` and add members.',
+              'Assign mailboxes to those members on the Accounts page with `can_receive=1`.',
+              'Verify in `/team-overview`, keeping its member-derivation limitation in mind.',
+            ],
+          },
+        ],
+      },
+      {
         id: 'server-move',
         title: 'Mail-server move handling',
         items: [
@@ -308,6 +360,58 @@ const CONTENT = {
           'Email Accounts — `POST /api/email-accounts`, encrypted credentials, `/sync-status`, assignment aur Recheck button.',
           'Users — users assign/revoke karein, `POST /api/assignments/recompute` aur `/change-password` par per-user pehli login rotation.',
           'Search — API responses cursor/offset se paginate hote hain aur shapes compatible rehte hain.',
+        ],
+      },
+      {
+        id: 'brands-teams-users',
+        title: 'Brands, Teams aur User Management',
+        groups: [
+          {
+            title: 'Brands & Access Matrix (/brands)',
+            items: [
+              '`brands` table ke fields: `domain`, `name`, `status`, `lead_id`, `team_id`, `created_by`.',
+              'Maqsad: har domain ke liye access policy, zanjir `domain → team lead → team → mailboxes` ke mutabiq.',
+              'Auto-assign preview `POST /api/email-accounts/auto-assign-preview` ko call karta hai aur asli backend data se dikhata hai ke kaun se users ko access milega.',
+              'Maujooda halat: ek brand `alphatach.com`, jiska `lead_id` NULL aur `team_id` NULL hai (abhi lead/team configure nahi hua).',
+            ],
+          },
+          {
+            title: 'Teams (/teams)',
+            items: [
+              '`teams` table ke fields: `name`, `brand_id`, `lead_id`; members `team_user` pivot mein rehte hain (`role=member`, `added_by`).',
+              'Team banane ke liye `brand_id` aur `lead_id` zaroori hain.',
+              'Member add/remove `POST /api/teams/{id}/members` aur `DELETE /api/teams/{id}/members/{userId}` se wired hai.',
+              'Malloom masla: FE lead dropdown sirf un users ko dikhata hai jin ka role `team-lead` hai; sirf super-admin maujood hone par `team-lead` user banne tak UI se team nahi ban sakti.',
+            ],
+          },
+          {
+            title: 'Team Overview (/team-overview)',
+            items: [
+              'Teams, members aur assigned mailboxes ka read-only aggregated view.',
+              'Admin saari teams dekhta hai; normal user sirf woh teams dekhta hai jin ka woh lead hai.',
+              'Malloom masla: member identities abhi bhi user fields (`lead_id`/`team_id`) se nikalte hain, `team_user` pivot se nahi, isliye pivot rows hone par bhi dikhaya gaya member list galat ho sakta hai.',
+            ],
+          },
+          {
+            title: 'User Management (/users)',
+            items: [
+              'Roles: `super-admin` (sab kuch), `admin` (operations), `team-lead` (apni team), `user` (sirf assigned mailboxes).',
+              'Actions: user create (`name`/`email`/`password`/`role`), `name`/`email`/`role` edit, suspend, unsuspend, soft delete (Trash), restore, force delete, bulk actions.',
+              'Mailbox assignment Accounts page par `email_account_user` ke through `can_send` aur `can_receive` flags ke saath hota hai.',
+              'Maujooda halat: dono asli accounts (`i.T@alphatach.com` aur `it.support@alphatach.com`) `super-admin` user ko `can_send=1` aur `can_receive=1` ke saath assign hain, isliye naye mail ki notifications abhi usi admin ko jati hain.',
+            ],
+          },
+          {
+            title: 'Tajweez kardan setup order',
+            numbered: true,
+            items: [
+              '`/users` me `team-lead` role ka user banayein.',
+              '`/brands` me `alphatach.com` brand par woh lead set karein (ya naya brand banayein).',
+              '`/teams` me brand ke neeche team banayein aur members add karein.',
+              'Accounts page par un members ko mailboxes assign karein, `can_receive=1` ke saath.',
+              '`/team-overview` me verify karein, aur uski member-derivation limitation ko dhyaan me rakhein.',
+            ],
+          },
         ],
       },
       {
@@ -502,6 +606,58 @@ const CONTENT = {
         ],
       },
       {
+        id: 'brands-teams-users',
+        title: 'Brands، Teams aur User Management',
+        groups: [
+          {
+            title: 'Brands & Access Matrix (/brands)',
+            items: [
+              '`brands` ٹیبل کے فیلڈز: `domain`، `name`، `status`، `lead_id`، `team_id`، `created_by`۔',
+              'مقصد: ہر ڈومین کے لیے access policy، زنجیر `domain → team lead → team → mailboxes` کے مطابق۔',
+              'Auto-assign preview `POST /api/email-accounts/auto-assign-preview` کو کال کرتا ہے اور حقیقی backend ڈیٹا سے دکھاتا ہے کہ کون سے صارفین کو رسائی حاصل ہوگی۔',
+              'حالیہ حالت: ایک برانڈ `alphatach.com`، جس کا `lead_id` NULL اور `team_id` NULL ہے (ابھی لیڈ/ٹیم ترتیب نہیں دی گئی)۔',
+            ],
+          },
+          {
+            title: 'Teams (/teams)',
+            items: [
+              '`teams` ٹیبل کے فیلڈز: `name`، `brand_id`، `lead_id`؛ ارکان `team_user` pivot میں محفوظ ہیں (`role=member`، `added_by`)۔',
+              'ٹیم بنانے کے لیے `brand_id` اور `lead_id` درکار ہیں۔',
+              'رکن شامل/حذف کرنا `POST /api/teams/{id}/members` اور `DELETE /api/teams/{id}/members/{userId}` کے ذریعے wired ہے۔',
+              'معلوم حد: FE lead ڈراپ ڈاؤن صرف ان صارفین کو دکھاتا ہے جن کا کردار `team-lead` ہے؛ صرف super-admin موجود ہونے پر `team-lead` صارف بننے تک UI سے ٹیم نہیں بنائی جا سکتی۔',
+            ],
+          },
+          {
+            title: 'Team Overview (/team-overview)',
+            items: [
+              'ٹیمز، ارکان اور تفویض شدہ mailboxes کا صرف پڑھنے کے قابل aggregated منظر۔',
+              'Admin تمام ٹیمز دیکھتا ہے؛ عام صارف صرف وہ ٹیمز دیکھتا ہے جن کا وہ لیڈ ہو۔',
+              'معلوم حد: ارکان کی شناخت اب بھی صارف کے فیلڈز (`lead_id`/`team_id`) سے حاصل کی جاتی ہے، `team_user` pivot سے نہیں، اس لیے pivot سطریں موجود ہونے کے باوجود دکھائی گئی فہرست غلط ہو سکتی ہے۔',
+            ],
+          },
+          {
+            title: 'User Management (/users)',
+            items: [
+              'کردار: `super-admin` (سب کچھ)، `admin` (آپریشنز)، `team-lead` (اپنی ٹیم)، `user` (صرف تفویض شدہ mailboxes)۔',
+              'اعمال: صارف تخلیق (`name`/`email`/`password`/`role`)، `name`/`email`/`role` میں ترمیم، suspend، unsuspend، soft delete (Trash)، restore، force delete، bulk actions۔',
+              'Mailbox کی تفویض Accounts صفحے پر `email_account_user` کے ذریعے `can_send` اور `can_receive` پرچموں کے ساتھ ہوتی ہے۔',
+              'حالیہ حالت: دونوں حقیقی اکاؤنٹس (`i.T@alphatach.com` اور `it.support@alphatach.com`) `super-admin` صارف کو `can_send=1` اور `can_receive=1` کے ساتھ تفویض ہیں، اس لیے نئے میل کی اطلاعات فی الحال اسی ایڈمن کو جاتی ہیں۔',
+            ],
+          },
+          {
+            title: 'تجویز کردہ setup ترتیب',
+            numbered: true,
+            items: [
+              '`/users` میں `team-lead` کردار کا صارف بنائیں۔',
+              '`/brands` میں `alphatach.com` برانڈ پر وہ لیڈ مقرر کریں (یا نیا برانڈ بنائیں)۔',
+              '`/teams` میں برانڈ کے تحت ٹیم بنائیں اور ارکان شامل کریں۔',
+              'Accounts صفحے پر ان ارکان کو mailboxes تفویض کریں، `can_receive=1` کے ساتھ۔',
+              '`/team-overview` میں تصدیق کریں اور اس کی member-derivation حد کو ذہن میں رکھیں۔',
+            ],
+          },
+        ],
+      },
+      {
         id: 'server-move',
         title: 'میل سرور کی منتقلی کا طریقہ',
         items: [
@@ -632,21 +788,38 @@ export default function WorkflowGuide() {
               <Badge variant="primary">{String(index + 1).padStart(2, '0')}</Badge>
               <h2 className="text-lg font-semibold">{section.title}</h2>
             </div>
-            <ul className={`space-y-2 text-sm text-muted list-disc ${isUrdu ? 'pr-5 text-right' : 'pl-5'}`}>
-              {section.items.map((item, i) => {
-                const menuParts = section.id === 'admin-menu' && item.includes(' — ') ? item.split(' — ') : null
-                return (
-                  <li key={i}>
-                    {menuParts ? (
-                      <>
-                        <strong className="font-semibold text-[var(--text)]">{menuParts[0]}</strong>
-                        <span> — <RichText text={menuParts.slice(1).join(' — ')} /></span>
-                      </>
-                    ) : <RichText text={item} />}
-                  </li>
-                )
-              })}
-            </ul>
+            {section.groups ? (
+              <div className="space-y-4">
+                {section.groups.map((group, gi) => {
+                  const listClass = `space-y-2 text-sm text-muted ${group.numbered ? 'list-decimal' : 'list-disc'} ${isUrdu ? 'pr-5 text-right' : 'pl-5'}`
+                  const items = group.items.map((item, i) => (
+                    <li key={i}><RichText text={item} /></li>
+                  ))
+                  return (
+                    <div key={gi}>
+                      <h3 className={`text-sm font-semibold text-[var(--text)] mb-2 ${isUrdu ? 'text-right' : 'text-left'}`}>{group.title}</h3>
+                      {group.numbered ? <ol className={listClass}>{items}</ol> : <ul className={listClass}>{items}</ul>}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <ul className={`space-y-2 text-sm text-muted list-disc ${isUrdu ? 'pr-5 text-right' : 'pl-5'}`}>
+                {section.items.map((item, i) => {
+                  const menuParts = section.id === 'admin-menu' && item.includes(' — ') ? item.split(' — ') : null
+                  return (
+                    <li key={i}>
+                      {menuParts ? (
+                        <>
+                          <strong className="font-semibold text-[var(--text)]">{menuParts[0]}</strong>
+                          <span> — <RichText text={menuParts.slice(1).join(' — ')} /></span>
+                        </>
+                      ) : <RichText text={item} />}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </CardBody>
         </Card>
       ))}
