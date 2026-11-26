@@ -9,7 +9,7 @@ import {
   Input, Modal, PageHeader, Select, Table, Tabs, Td, Th, Tr, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 const emptyForm = {
   email: '', password: '', brand_id: '', domain_id: '', status: 'active',
@@ -93,8 +93,8 @@ export default function Accounts() {
       const res = await api.setAccountSync(a.id, { sync_enabled: next, reason })
       setAccounts(prev => prev.map(x => x.id === a.id ? { ...x, sync_enabled: next, sync: next ? 'idle' : 'paused', effective_sync: res.effective_sync } : x))
       toast(next ? 'Mailbox sync enabled' : 'Mailbox sync paused', 'success', { title: a.email })
-    } catch {
-      toast('Could not change sync state.', 'error', { title: 'Sync control failed' })
+    } catch (err) {
+      toast(describeApiError(err, 'Could not change sync state.'), 'error', { title: 'Sync control failed' })
     }
   }
 
@@ -103,13 +103,13 @@ export default function Accounts() {
       const result = await api.rediscover(a.id)
       toast(`Connection OK — ${result?.imap_host || a.imap_host || 'host unchanged'}.`, 'success', { title: a.email })
     } catch (error) {
-      toast(error?.message || 'Could not recheck connection.', 'error', { title: 'Recheck failed' })
+      toast(describeApiError(error, 'Could not recheck connection.'), 'error', { title: 'Recheck failed' })
       return
     }
     try {
       setAccounts(await api.accounts())
-    } catch {
-      toast('Connection rechecked, but the account list could not be refreshed.', 'error', { title: 'Refresh failed' })
+    } catch (err) {
+      toast(describeApiError(err, 'Connection rechecked, but the account list could not be refreshed.'), 'error', { title: 'Refresh failed' })
     }
   }
 
@@ -185,8 +185,8 @@ export default function Accounts() {
         toast(`${form.email.trim()} was added.`, 'success', { title: 'Account created' })
       }
       setAddOpen(false); setEditing(null); setForm(emptyForm); setPreview(null)
-    } catch {
-      toast('Could not save account.', 'error', { title: 'Save failed' })
+    } catch (err) {
+      toast(describeApiError(err, 'Could not save account.'), 'error', { title: 'Save failed' })
     }
   }
 
@@ -207,8 +207,8 @@ export default function Accounts() {
         setAccounts(prev => prev.filter(a => a.id !== account.id))
         toast(`${account.email} permanently removed.`, 'success', { title: 'Account purged' })
       }
-    } catch {
-      toast('Could not update account.', 'error', { title: 'Action failed' })
+    } catch (err) {
+      toast(describeApiError(err, 'Could not update account.'), 'error', { title: 'Action failed' })
     }
     setConfirm(null)
   }

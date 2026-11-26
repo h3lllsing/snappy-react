@@ -33,13 +33,13 @@ export default function UserDetail() {
   const [confirm, setConfirm] = useState(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [reason, setReason] = useState('')
-  const [form, setForm] = useState({ name: '', email: '', role: 'user', status: 'active', team_lead_id: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'user' })
 
   const adoptUser = found => {
     if (!found) return false
     setUser(found)
     setReason(found.suspension_reason || '')
-    setForm({ name: found.name, email: found.email, role: found.role, status: found.status, team_lead_id: found.team_lead_id ? String(found.team_lead_id) : '' })
+    setForm({ name: found.name, email: found.email, role: found.role })
     return true
   }
   const showError = (err, fallback, title = 'Action failed') =>
@@ -271,18 +271,21 @@ export default function UserDetail() {
             <Field label="Full name" required><Input value={form.name} onChange={set('name')} /></Field>
             <Field label="Email" required><Input value={form.email} onChange={set('email')} /></Field>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Role"><Select value={form.role} onChange={set('role')}>
-              <option value="user">user</option><option value="team-lead">team-lead</option><option value="admin">admin</option><option value="super-admin">super-admin</option>
-            </Select></Field>
-            <Field label="Team lead"><Select value={form.team_lead_id} onChange={set('team_lead_id')}>
-              <option value="">No team lead</option>
-              {leads.map(l => <option key={l.id} value={l.id}>{l.name} · {l.team}</option>)}
-            </Select></Field>
-          </div>
-          <Field label="Status"><Select value={form.status} onChange={set('status')}>
-            <option value="active">active</option><option value="suspended">suspended</option>
+          <Field label="Role"><Select value={form.role} onChange={set('role')}>
+            <option value="user">user</option><option value="team-lead">team-lead</option><option value="admin">admin</option><option value="super-admin">super-admin</option>
           </Select></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="surface-2 border border-app rounded-xl px-3.5 py-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted font-semibold">Status</p>
+              <p className="text-sm font-semibold mt-0.5">{user.deleted_at ? 'trashed' : user.status}</p>
+              <p className="text-[11px] text-muted mt-1">Managed via Suspend/Unsuspend actions.</p>
+            </div>
+            <div className="surface-2 border border-app rounded-xl px-3.5 py-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted font-semibold">Team lead</p>
+              <p className="text-sm font-semibold mt-0.5">{leads.find(l => l.id === user.team_lead_id)?.name || '—'}</p>
+              <p className="text-[11px] text-muted mt-1">Read-only; not updated by this save.</p>
+            </div>
+          </div>
         </div>
       </Modal>
 

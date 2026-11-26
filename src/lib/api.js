@@ -70,7 +70,7 @@ export const api = {
     patch(`/email-accounts/${accountId}/assign/${userId}`, { can_send: true, can_receive: true }),
   revokeAssignment: async (accountId, userId) =>
     remove(`/email-accounts/${accountId}/assign/${userId}`),
-  syncAccount: async (id) => post(`/email-accounts/${id}/sync`),
+  syncAccount: async (id) => patch(`/email-accounts/${id}/sync`),
   rediscover: async (id) => post(`/email-accounts/${id}/rediscover`),
   webmailToken: async (accountId) => post(`/email-accounts/${accountId}/webmail-token`),
   setDomainSync: async (id, payload) => patch(`/domains/${id}/sync`, payload),
@@ -79,6 +79,8 @@ export const api = {
 
   markNotificationRead: async (id) => put(`/notifications/${id}/read`),
   markAllRead: async () => put('/notifications/read-all'),
+  deleteNotification: async (id) => remove(`/notifications/${id}`),
+  restoreNotification: async (id) => post(`/notifications/${id}/restore`),
   // Keyset poll: pass the opaque cursor and the page size as query params and
   // opt out of HTTP caching. The response envelope is returned untouched.
   notificationsPoll: async (cursor = null, opts = {}) => {
@@ -93,6 +95,8 @@ export const api = {
   },
 
   changePassword: async (data) => post('/change-password', data),
+  // Self-service profile updates never carry a role; use updateUser for admin edits.
+  updateProfile: async (data) => patch('/profile', data),
   updateUser: async (id, data) => patch(`/users/${id}`, data),
   deleteUser: async (id) => remove(`/users/${id}`),
   suspendUser: async (id, payload) =>
@@ -100,7 +104,6 @@ export const api = {
   unsuspendUser: async (id) => patch(`/users/${id}/unsuspend`),
   restoreUser: async (id) => patch(`/users/${id}/restore`),
   forceDeleteUser: async (id) => remove(`/users/${id}/force-delete`),
-  resetPassword: async (payload) => post('/change-password', payload),
 
   addTeamMember: async (teamId, userId) => post(`/teams/${teamId}/members`, { user_id: userId }),
   removeTeamMember: async (teamId, userId) => remove(`/teams/${teamId}/members/${userId}`),

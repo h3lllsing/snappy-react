@@ -12,6 +12,21 @@ import { useAuth } from '../context/AuthContext'
 import { useLive } from '../context/LiveContext'
 import api from '../lib/api'
 
+const LOAD_LABELS = {
+  stats: 'Dashboard statistics',
+  brands: 'Brands',
+  accounts: 'Email accounts',
+  activities: 'Recent activity',
+}
+
+function Unavailable({ label }) {
+  return (
+    <div className="rounded-xl border border-app surface-2 px-4 py-6 text-center text-xs text-muted">
+      {label} not available for your role.
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -21,21 +36,36 @@ export default function Dashboard() {
   const [brands, setBrands] = useState([])
   const [accounts, setAccounts] = useState([])
   const [activities, setActivities] = useState([])
+  // Each card stands on its own: an admin-only 403 must not discard the rest.
+  const [available, setAvailable] = useState({ stats: true, brands: true, accounts: true, activities: true })
 
   useEffect(() => {
     let alive = true
-    Promise.all([api.dashboard(), api.brands(), api.accounts(), api.activities()])
-      .then(([s, b, a, act]) => {
+    const keys = ['stats', 'brands', 'accounts', 'activities']
+    const setters = [setStats, setBrands, setAccounts, setActivities]
+    Promise.allSettled([api.dashboard(), api.brands(), api.accounts(), api.activities()])
+      .then(results => {
         if (!alive) return
-        setStats(s); setBrands(b); setAccounts(a); setActivities(act)
+        results.forEach((result, index) => {
+          const key = keys[index]
+          if (result.status === 'fulfilled') {
+            setters[index](result.value)
+            setAvailable(prev => ({ ...prev, [key]: true }))
+            return
+          }
+          if (Number(result.reason?.status) === 403) {
+            setAvailable(prev => ({ ...prev, [key]: false }))
+            return
+          }
+          toast(`Could not load ${LOAD_LABELS[key]}.`, 'error', { title: 'Load failed' })
+        })
       })
-      .catch(() => { if (alive) toast('Could not load dashboard data.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
 
   const accountIdFor = (email) => accounts.find(a => a.email === email)?.id
   const firstAccountFor = (domain) => accounts.find(a => a.brand === domain)?.id
-  const healthy = (stats?.failed_imap_accounts || 0) === 0
+  const healthy = stats ? (stats.failed_imap_accounts || 0) === 0 : null
   const pausedDomains = brands.filter(b => b.status === 'suspended').length
 
   const attention = [
@@ -58,15 +88,17 @@ export default function Dashboard() {
       />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6 mb-5">
-        <StatCard label="Users" value={stats?.total_users} icon={Users} tone="indigo" sub="Across all teams" onClick={() => navigate('/users')} />
-        <StatCard label="Email Accounts" value={stats?.total_accounts} icon={Mail} tone="sky" sub="Configured mailboxes" onClick={() => navigate('/accounts')} />
-        <StatCard label="Active Domains" value={stats?.active_domains} icon={Globe2} tone="emerald" sub="Connected domains" onClick={() => navigate('/domains')} />
-        <StatCard label="Unread Notifications" value={unread} icon={Bell} tone="indigo" sub={`of ${stats?.total_notifications ?? 0} total`} onClick={() => navigate('/notifications')} />
-        <StatCard label="Failed IMAP" value={stats?.failed_imap_accounts} icon={Server} tone="red" sub="Needs attention" onClick={() => navigate('/imap-status')} />
-        <StatCard label="Suspended Users" value={stats?.suspended_users} icon={UserX} tone="amber" sub="Access blocked" onClick={() => navigate('/users')} />
+        {available.stats ? <>
+          <StatCard label="Users" value={stats?.total_users} icon={Users} tone="indigo" sub="Across all teams" onClick={() => navigate('/users')} />
+          <StatCard label="Email Accounts" value={stats?.total_accounts} icon={Mail} tone="sky" sub="Configured mailboxes" onClick={() => navigate('/accounts')} />
+          <StatCard label="Active Domains" value={stats?.active_domains} icon={Globe2} tone="emerald" sub="Connected domains" onClick={() => navigate('/domains')} />
+          <StatCard label="Unread Notifications" value={unread} icon={Bell} tone="indigo" sub={`of ${stats?.total_notifications ?? 0} total`} onClick={() => navigate('/notifications')} />
+          <StatCard label="Failed IMAP" value={stats?.failed_imap_accounts} icon={Server} tone="red" sub="Needs attention" onClick={() => navigate('/imap-status')} />
+          <StatCard label="Suspended Users" value={stats?.suspended_users} icon={UserX} tone="amber" sub="Access blocked" onClick={() => navigate('/users')} />
+        </> : <div className="col-span-full"><Unavailable label="Workspace statistics" /></div>}
       </div>
 
-      <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-2xl border px-4 py-3.5 mb-5 ${healthy ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : 'border-red-500/30 bg-red-500/10 text-red-500'}`}>
+      {available.stats && stats && <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-2xl border px-4 py-3.5 mb-5 ${healthy ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : 'border-red-500/30 bg-red-500/10 text-red-500'}`}>
         <div className="w-9 h-9 rounded-xl surface-2 flex items-center justify-center shrink-0">
           {healthy ? <ShieldCheck size={19} /> : <AlertTriangle size={19} />}
         </div>
@@ -83,7 +115,7 @@ export default function Dashboard() {
             {healthy ? 'View health' : 'Review IMAP status'} <ArrowUpRight size={14} />
           </Button>
         </Link>
-      </div>
+      </div>}
 
       <div className="flex flex-wrap items-center gap-2 mb-5">
         <span className="text-[11px] uppercase tracking-wider text-muted font-semibold mr-1">Needs attention</span>
@@ -108,7 +140,8 @@ export default function Dashboard() {
             </div>}
           />
           <CardBody className="p-0">
-            {mails.slice(0, 6).map(mail => {
+            {!available.accounts && <div className="p-5"><Unavailable label="The live inbox" /></div>}
+            {available.accounts && mails.slice(0, 6).map(mail => {
               const mailAccountId = accountIdFor(mail.account)
               return (
                 <div key={mail.id} className="flex items-start gap-3 px-5 py-3.5 border-b border-app last:border-0 hover:surface-2 transition-colors">
@@ -139,17 +172,18 @@ export default function Dashboard() {
                 </div>
               )
             })}
-            <div className="flex items-center justify-between px-5 py-3">
+            {available.accounts && <div className="flex items-center justify-between px-5 py-3">
               <span className="text-[11px] text-muted flex items-center gap-1.5"><Radio size={12} className="text-emerald-500" /> {inboxUnread} unread in this view · updated live · {pulse} events</span>
               <Link to="/webmail" className="text-xs font-semibold text-indigo-500 hover:underline">View all mail →</Link>
-            </div>
+            </div>}
           </CardBody>
         </Card>
 
         <Card className="lg:col-span-2 overflow-hidden">
           <CardHeader title="My Brands" subtitle="Domains you own and their coverage." actions={<Link to="/brands"><Button size="sm" variant="ghost">Matrix →</Button></Link>} />
           <CardBody className="space-y-3">
-            {brands.map(brand => {
+            {!available.brands && <Unavailable label="Brand coverage" />}
+            {available.brands && brands.map(brand => {
               const mailId = firstAccountFor(brand.domain)
               return (
                 <div key={brand.id} className="surface-2 border border-app rounded-xl p-3.5 card-hover">
@@ -187,7 +221,8 @@ export default function Dashboard() {
       <Card className="mt-5">
         <CardHeader title="Recent activity" subtitle="Latest actions across the workspace." actions={<Link to="/activity-logs"><Button size="sm" variant="ghost">All activity →</Button></Link>} />
         <CardBody className="p-0">
-          {activities.map(a => (
+          {!available.activities && <div className="p-5"><Unavailable label="Recent activity" /></div>}
+          {available.activities && activities.map(a => (
             <div key={a.id} className="flex items-center gap-3 px-5 py-3 border-b border-app last:border-0">
               <div className="w-8 h-8 rounded-lg surface-2 border border-app flex items-center justify-center text-indigo-500 shrink-0"><Activity size={15} /></div>
               <Avatar name={a.causer} size="sm" />

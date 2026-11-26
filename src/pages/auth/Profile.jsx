@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Eye, EyeOff, KeyRound, Lock, Moon, Save, ShieldCheck, Sun, User } from 'lucide-react'
-import { Alert, Avatar, Badge, Button, Card, CardBody, CardHeader, Divider, Field, Input, PageHeader, useToast } from '../../components/ui'
+import { Avatar, Badge, Button, Card, CardBody, CardHeader, Divider, Field, Input, PageHeader, useToast } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import api from '../../lib/api'
@@ -45,7 +45,7 @@ export default function Profile() {
     }
     setLoading(true)
     try {
-      await api.updateUser(user.id, { name: form.name.trim(), email: form.email.trim() })
+      const updated = await api.updateProfile({ name: form.name.trim(), email: form.email.trim() })
       if (changingPassword) {
         await api.changePassword({
           current_password: form.current_password,
@@ -53,7 +53,7 @@ export default function Profile() {
           password_confirmation: form.password_confirmation,
         })
       }
-      setUser(u => ({ ...u, name: form.name.trim(), email: form.email.trim() }))
+      setUser(u => ({ ...u, ...updated }))
       setForm(f => ({ ...f, current_password: '', password: '', password_confirmation: '' }))
       toast('Your profile has been updated.', 'success', { title: 'Changes saved' })
       if (changingPassword) toast('Password changed successfully.', 'success', { title: 'Password updated' })
@@ -74,7 +74,6 @@ export default function Profile() {
             <CardHeader title="Account information" subtitle="Update your personal details." />
             <CardBody>
               <form onSubmit={save} className="space-y-5">
-                <input type="hidden" name="updated_at" value="local-reference" />
                 <div className="flex items-center gap-3 pb-1">
                   <Avatar name={form.name} size="lg" />
                   <div>
@@ -97,10 +96,6 @@ export default function Profile() {
                     </div>
                   </Field>
                 </div>
-
-                <Alert type="info">
-                  The hidden updated_at field is the optimistic concurrency token accepted by the API to prevent conflicting updates.
-                </Alert>
 
                 <Divider label="Change password" />
 
@@ -176,8 +171,7 @@ export default function Profile() {
               <div className="flex justify-between"><span className="text-muted">User ID</span><span className="font-semibold">#{user?.id}</span></div>
               <Divider />
               <div className="flex justify-between"><span className="text-muted">Role</span><Badge role={user?.role}>{user?.role}</Badge></div>
-              <Divider />
-              <div className="flex justify-between"><span className="text-muted">Status</span><Badge variant="active" dot>Active</Badge></div>
+              {user?.suspended_at && <><Divider /><div className="flex justify-between"><span className="text-muted">Suspended at</span><span className="font-semibold">{new Date(user.suspended_at).toLocaleString()}</span></div></>}
             </CardBody>
           </Card>
         </div>

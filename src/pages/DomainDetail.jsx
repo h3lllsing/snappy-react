@@ -5,11 +5,11 @@ import {
   Plus, RefreshCw, Server, ShieldCheck, Upload, XCircle,
 } from 'lucide-react'
 import {
-  Badge, Button, Card, CardBody, CardHeader, EmptyState, Field,
+  Badge, Button, Card, CardBody, CardHeader, EmptyState, Field, Input,
   PageHeader, Table, Tabs, Td, Textarea, Th, Tr, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 export default function DomainDetail() {
   const { id } = useParams()
@@ -18,7 +18,10 @@ export default function DomainDetail() {
   const [domain, setDomain] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [bulk, setBulk] = useState('')
+  const [importPassword, setImportPassword] = useState('')
+  const [importSmtpHost, setImportSmtpHost] = useState('')
   const [importing, setImporting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState('accounts')
 
   useEffect(() => {
@@ -34,6 +37,11 @@ export default function DomainDetail() {
     return () => { alive = false }
   }, [id, toast])
 
+  // Seeds the editable SMTP field from the real domain row; never from imap_host.
+  useEffect(() => {
+    if (domain) setImportSmtpHost(domain.smtp_host || '')
+  }, [domain?.id, domain?.smtp_host])
+
   const domainAccounts = useMemo(() => accounts.filter(a => String(a.domain_id) === String(id)), [accounts, id])
 
   const parseBulk = text => text.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
@@ -46,36 +54,56 @@ export default function DomainDetail() {
   const preview = useMemo(() => parseBulk(bulk), [bulk])
 
   const importAccounts = async () => {
-    if (!preview.length) { toast('Add at least one username:password line.', 'error', { title: 'Nothing to import' }); return }
+    if (!preview.length) { toast('Add at least one username line.', 'error', { title: 'Nothing to import' }); return }
+    if (!importSmtpHost.trim()) { toast('Enter the SMTP host for these accounts.', 'error', { title: 'SMTP host required' }); return }
+    if (preview.some(x => !x.password && !importPassword)) {
+      toast('Enter a password for every line, inline or in the default password field.', 'error', { title: 'Password required' })
+      return
+    }
     setImporting(true)
     try {
       const created = await Promise.all(preview.map(x => api.createAccount({
         email: x.username.includes('@') ? x.username : `${x.username}@${domain.name}`,
         brand: domain.name, domain_id: domain.id,
         status: 'active', sync: 'idle', sync_enabled: true, unread: 0, last_sync: 'pending',
-        imap_host: domain.imap_host, smtp_host: domain.smtp_host || domain.imap_host,
-        assigned: [], password_set: !!x.password,
+        imap_host: domain.imap_host, smtp_host: importSmtpHost.trim(),
+        assigned: [], password: x.password || importPassword,
       })))
       setAccounts(prev => [...prev, ...created])
       setBulk('')
       toast(`${created.length} account${created.length === 1 ? '' : 's'} queued for ${domain.name}.`, 'success', { title: 'Bulk import complete' })
-    } catch {
-      toast('Could not import accounts.', 'error', { title: 'Bulk import failed' })
+    } catch (err) {
+      toast(describeApiError(err, 'Could not import accounts.'), 'error', { title: 'Bulk import failed' })
     } finally {
       setImporting(false)
     }
   }
 
+  const refreshSettings = async () => {
+    setRefreshing(true)
+    try {
+      const rows = await api.domains()
+      const found = rows.find(x => String(x.id) === String(id))
+      if (found) setDomain(found)
+      toast('Settings refreshed from the backend.', 'success', { title: 'Refresh complete' })
+    } catch (err) {
+      toast(describeApiError(err, 'Could not refresh domain settings.'), 'error', { title: 'Refresh failed' })
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   if (!domain) return <div className="animate-fade-up"><Breadcrumbs /><Card><EmptyState icon={Globe2} title="Domain not found" message="This domain may have been removed." /></Card></div>
 
+  // Only server-supplied values are rendered; absent settings are omitted.
+  const presentRows = rows => rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
   const settings = [
-    { group: 'IMAP (incoming)', icon: Server, tone: 'text-indigo-500', rows: [
-      ['Host', domain.imap_host], ['Port', domain.imap_port], ['Encryption', (domain.imap_encryption || domain.encryption || 'ssl').toUpperCase()],
-    ] },
-    { group: 'SMTP (outgoing)', icon: KeyRound, tone: 'text-purple-500', rows: [
-      ['Host', domain.smtp_host || `mail.${domain.name}`], ['Port', domain.smtp_port || 587], ['Encryption', (domain.smtp_encryption || 'tls').toUpperCase()],
-      ['Username', domain.smtp_username || '—'],
-    ] },
+    { group: 'IMAP (incoming)', icon: Server, tone: 'text-indigo-500', rows: presentRows([
+      ['Host', domain.imap_host], ['Port', domain.imap_port], ['Encryption', domain.encryption],
+    ]) },
+    { group: 'SMTP (outgoing)', icon: KeyRound, tone: 'text-purple-500', rows: presentRows([
+      ['Host', domain.smtp_host], ['Port', domain.smtp_port],
+    ]) },
   ]
 
   return (
@@ -87,7 +115,7 @@ export default function DomainDetail() {
         backTo={() => navigate('/domains')}
         actions={<>
           <Badge variant={domain.status} dot>{domain.status}</Badge>
-          <Button variant="secondary" onClick={() => toast('Settings refreshed from the backend.', 'info', { title: 'Refresh complete' })}><RefreshCw size={15} /> Refresh</Button>
+          <Button variant="secondary" onClick={refreshSettings} loading={refreshing}><RefreshCw size={15} /> Refresh</Button>
           <Button onClick={() => { setTab('bulk'); document.getElementById('bulk-panel')?.scrollIntoView({ behavior: 'smooth' }) }}><Plus size={16} /> Bulk Add Accounts</Button>
         </>}
       />
@@ -96,12 +124,12 @@ export default function DomainDetail() {
         <div className="p-5 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent border-b border-app flex flex-wrap items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0"><Globe2 size={22} /></div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap"><h2 className="text-xl font-bold">{domain.name}</h2><Badge variant="primary" className="text-[10px]"><ShieldCheck size={10} /> Verified</Badge></div>
+            <div className="flex items-center gap-2 flex-wrap"><h2 className="text-xl font-bold">{domain.name}</h2></div>
             <p className="text-xs text-muted mt-0.5">Created by {domain.created_by} · {domain.created_at}</p>
           </div>
           <div className="flex gap-2">
             <Badge variant="default"><Server size={11} /> {domainAccounts.length} accounts</Badge>
-            <Badge variant={domain.encryption === 'ssl' ? 'success' : 'warning'}><Lock size={11} /> {(domain.encryption || 'ssl').toUpperCase()}</Badge>
+            {domain.encryption && <Badge variant={domain.encryption === 'ssl' ? 'success' : 'warning'}><Lock size={11} /> {String(domain.encryption).toUpperCase()}</Badge>}
           </div>
         </div>
         <CardBody>

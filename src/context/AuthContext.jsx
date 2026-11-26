@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 import { connectEcho, disconnectEcho, startDemoStream } from '../lib/echo'
 import { useToast } from '../components/ui'
 import { useLive } from './LiveContext'
@@ -63,7 +63,13 @@ export function AuthProvider({ children }) {
   const failuresRef = useRef(0)
 
   useEffect(() => {
-    api.me().then(setUser).catch(() => {}).finally(() => setLoading(false))
+    api.me()
+      .then(setUser)
+      .catch(err => {
+        if (err?.status === 401) return
+        toastRef.current(describeApiError(err, 'Could not restore session.'), 'error', { title: 'Session check failed' })
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const login = useCallback(async (credentials) => {

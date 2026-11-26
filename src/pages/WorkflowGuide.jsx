@@ -76,7 +76,7 @@ const CONTENT = {
           'The `portal-audit` SnappyMail plugin hooks user actions and calls `POST /api/webmail/activity`, which returns 204.',
           '`actor_id` and `email_account_id` are resolved from the validated webmail session, never from request input.',
           'Rows land in `mailbox_activity` and `ops_events`; the Activity Logs page and Mail Activity page show actor, mailbox, subject/action and timestamp.',
-          '`POST /api/webmail/activity-log` is the documented read path; ops correlations are in `/api/ops/events`.',
+          'Write path is `POST /api/webmail/activity`; read path is `GET /api/webmail/activity-log` (Mail Activity) while Activity Logs uses `GET /api/activity-logs`. Ops correlations are in `/api/ops/events`.',
           'A manual actor row was verified at the DB/API level; no browser screenshot was retained.',
         ],
       },
@@ -108,7 +108,7 @@ const CONTENT = {
         items: [
           'Live Operations — Ops Console endpoints `/api/ops/*` plus `/api/health` checks and queue depth.',
           'IMAP Status — `/admin/imap-status` polls every 30 s and shows `idle`, `reconnecting`, `error`, `paused`, reconnect attempts and last check.',
-          'Activity Logs — `/activity-logs` reads `/api/webmail/activity-log` and shows actor, mailbox, subject/action and timestamp.',
+          'Activity Logs — `/activity-logs` reads `GET /api/activity-logs` and shows actor, mailbox, subject/action and timestamp.',
           'Mail Activity — actor-correct rows from `mailbox_activity` and `ops_events`, including the Mail Activity page.',
           'Login History — `login_audits` records such as `login_success` with IP and timestamp.',
           'Queue Monitor — Redis queue workers (`alphaspace-queue*`), `queue_depth` in `/api/health` and daily `queue:prune-failed`.',
@@ -129,7 +129,7 @@ const CONTENT = {
               '`brands` table fields: `domain`, `name`, `status`, `lead_id`, `team_id`, `created_by`.',
               'Purpose: access policy per domain following the chain `domain → team lead → team → mailboxes`.',
               'Auto-assign preview calls `POST /api/email-accounts/auto-assign-preview` and shows which users would receive access, from real backend data.',
-              'Current state: one brand `alphatach.com` with `lead_id` NULL and `team_id` NULL (no lead/team configured yet).',
+              'Current state depends on live data; use `/brands` to confirm configured leads and teams for each domain.',
             ],
           },
           {
@@ -155,7 +155,7 @@ const CONTENT = {
               'Roles: `super-admin` (everything), `admin` (operations), `team-lead` (own team), `user` (only assigned mailboxes).',
               'Actions: create user (`name`/`email`/`password`/`role`), edit `name`/`email`/`role`, suspend, unsuspend, soft delete (Trash), restore, force delete, bulk actions.',
               'Mailbox assignment happens on the Accounts page via `email_account_user` with `can_send` and `can_receive` flags.',
-              'Current state: both real accounts (`i.T@alphatach.com` and `it.support@alphatach.com`) are assigned to the `super-admin` user with `can_send=1` and `can_receive=1`, so new-mail notifications currently go to that admin.',
+              'Current mailbox assignments and notification recipients depend on live `email_account_user` data; verify in Accounts/Users before assuming who receives notifications.',
             ],
           },
           {
@@ -163,7 +163,7 @@ const CONTENT = {
             numbered: true,
             items: [
               'Create a user with role `team-lead` in `/users`.',
-              'Set that lead on the `alphatach.com` brand in `/brands` (or create a new brand).',
+              'Set that lead on the target brand in `/brands` (or create a new brand).',
               'Create a team under the brand in `/teams` and add members.',
               'Assign mailboxes to those members on the Accounts page with `can_receive=1`.',
               'Verify in `/team-overview`, keeping its member-derivation limitation in mind.',
@@ -223,7 +223,7 @@ const CONTENT = {
         items: [
           'Self-signed TLS for `10.20.30.250`: the certificate has IP + DNS SANs, but clients must trust the internal/self-signed CA; no public-CA trust is available for the bare IP.',
           '`APP_KEY` was deliberately not rotated so existing encrypted mailbox credentials remain decryptable; legacy git history was not purged.',
-          'The 800-account run was a throughput/contention test over seeded mirror rows with a dummy upstream; real-IMAP load, provider rate limits and 800 browser sessions remain unproven.',
+          'High-volume mirror contention tests were run on seeded data with a dummy upstream; real-IMAP load, provider rate limits and large concurrent browser sessions remain unproven.',
           'Horizon is not installed; queue workers are managed by systemd units (`alphaspace-queue*`, `alphaspace-idle@*`) and `/api/health`.',
           'SMTP-only move recovery is best-effort: automatic recovery triggers on IMAP failure, the weekly check is alert-only, and Recheck is the reliable apply path; unpushed rows stay `pushed_to_server_at IS NULL` until corrected and re-dispatched.',
           'Live config caveat observed 2026-11-26: backend `.env` reported `APP_ENV=local` and `APP_DEBUG=true`; set production values before public exposure.',
@@ -319,7 +319,7 @@ const CONTENT = {
           '`portal-audit` SnappyMail plugin user actions ko hook karta hai aur `POST /api/webmail/activity` call karta hai, jo 204 return karta hai.',
           '`actor_id` aur `email_account_id` validated webmail session se resolve hote hain, request input se nahi.',
           'Rows `mailbox_activity` aur `ops_events` me jate hain; Activity Logs aur Mail Activity page actor, mailbox, subject/action aur timestamp dikhate hain.',
-          '`POST /api/webmail/activity-log` documented read path hai; ops correlations `/api/ops/events` me hain.',
+          'Write path `POST /api/webmail/activity` hai; read path `GET /api/webmail/activity-log` (Mail Activity) hai, jabke Activity Logs `GET /api/activity-logs` use karta hai. Ops correlations `/api/ops/events` me hain.',
           'Ek manual actor row DB/API level par verify hui; browser screenshot retain nahi hua.',
         ],
       },
@@ -351,7 +351,7 @@ const CONTENT = {
         items: [
           'Live Operations — Ops Console endpoints `/api/ops/*` ke saath `/api/health` checks aur queue depth.',
           'IMAP Status — `/admin/imap-status` har 30 s par poll karta hai aur `idle`, `reconnecting`, `error`, `paused`, reconnect attempts aur last check dikhata hai.',
-          'Activity Logs — `/activity-logs` `/api/webmail/activity-log` padhta hai aur actor, mailbox, subject/action aur timestamp dikhata hai.',
+          'Activity Logs — `/activity-logs` `GET /api/activity-logs` padhta hai aur actor, mailbox, subject/action aur timestamp dikhata hai.',
           'Mail Activity — `mailbox_activity` aur `ops_events` se actor-correct rows, jinme Mail Activity page bhi shamil hai.',
           'Login History — `login_audits` entries jaise `login_success`, IP aur timestamp ke saath.',
           'Queue Monitor — Redis queue workers (`alphaspace-queue*`), `/api/health` me `queue_depth` aur daily `queue:prune-failed`.',
@@ -372,7 +372,7 @@ const CONTENT = {
               '`brands` table ke fields: `domain`, `name`, `status`, `lead_id`, `team_id`, `created_by`.',
               'Maqsad: har domain ke liye access policy, zanjir `domain → team lead → team → mailboxes` ke mutabiq.',
               'Auto-assign preview `POST /api/email-accounts/auto-assign-preview` ko call karta hai aur asli backend data se dikhata hai ke kaun se users ko access milega.',
-              'Maujooda halat: ek brand `alphatach.com`, jiska `lead_id` NULL aur `team_id` NULL hai (abhi lead/team configure nahi hua).',
+              'Maujooda halat live data par munhasir hai; har domain ke configured lead aur team ki tasdeeq `/brands` me karein.',
             ],
           },
           {
@@ -398,7 +398,7 @@ const CONTENT = {
               'Roles: `super-admin` (sab kuch), `admin` (operations), `team-lead` (apni team), `user` (sirf assigned mailboxes).',
               'Actions: user create (`name`/`email`/`password`/`role`), `name`/`email`/`role` edit, suspend, unsuspend, soft delete (Trash), restore, force delete, bulk actions.',
               'Mailbox assignment Accounts page par `email_account_user` ke through `can_send` aur `can_receive` flags ke saath hota hai.',
-              'Maujooda halat: dono asli accounts (`i.T@alphatach.com` aur `it.support@alphatach.com`) `super-admin` user ko `can_send=1` aur `can_receive=1` ke saath assign hain, isliye naye mail ki notifications abhi usi admin ko jati hain.',
+              'Maujooda mailbox assignments aur notification recipients live `email_account_user` data par munhasir hain; notifications kis ko milti hain, ye maan-ne se pehle Accounts/Users me verify karein.',
             ],
           },
           {
@@ -406,7 +406,7 @@ const CONTENT = {
             numbered: true,
             items: [
               '`/users` me `team-lead` role ka user banayein.',
-              '`/brands` me `alphatach.com` brand par woh lead set karein (ya naya brand banayein).',
+              '`/brands` me target brand par woh lead set karein (ya naya brand banayein).',
               '`/teams` me brand ke neeche team banayein aur members add karein.',
               'Accounts page par un members ko mailboxes assign karein, `can_receive=1` ke saath.',
               '`/team-overview` me verify karein, aur uski member-derivation limitation ko dhyaan me rakhein.',
@@ -466,7 +466,7 @@ const CONTENT = {
         items: [
           '`10.20.30.250` ke liye self-signed TLS: certificate me IP + DNS SANs hain, lekin clients ko internal/self-signed CA par bharosa karna padta hai; bare IP ke liye public-CA trust available nahi hai.',
           '`APP_KEY` jaan-bujhkar rotate nahi ki gayi taake maujooda encrypted mailbox credentials decrypt hoti rahein; purana git history purge nahi hui.',
-          '800-account run dummy upstream ke saath seeded mirror rows par throughput/contention test tha; real-IMAP load, provider rate limits aur 800 browser sessions abhi unproven hain.',
+          'High-volume mirror contention tests dummy upstream ke saath seeded data par kiye gaye thay; real-IMAP load, provider rate limits aur bari concurrent browser sessions abhi unproven hain.',
           'Horizon installed nahi hai; queue workers systemd units (`alphaspace-queue*`, `alphaspace-idle@*`) aur `/api/health` se manage hote hain.',
           'SMTP-only move recovery best-effort hai: automatic recovery IMAP failure par trigger hoti hai, weekly check alert-only hai, aur Recheck hi reliable apply path hai; rows tab tak `pushed_to_server_at IS NULL` rehte hain jab tak theek karke dobara dispatch na ho.',
           '2026-11-26 ko dekha gaya live config caveat: backend `.env` me `APP_ENV=local` aur `APP_DEBUG=true` tha; public exposure se pehle production values set karein.',
@@ -562,7 +562,7 @@ const CONTENT = {
           '`portal-audit` SnappyMail plugin صارف کے اعمال کو ہک کرتا ہے اور `POST /api/webmail/activity` کو کال کرتا ہے، جو 204 واپس کرتا ہے۔',
           '`actor_id` اور `email_account_id` تصدیق شدہ webmail session سے حل ہوتے ہیں، درخواست کے ان پٹ سے نہیں۔',
           'Rows `mailbox_activity` اور `ops_events` میں جاتے ہیں؛ Activity Logs اور Mail Activity صفحے actor، mailbox، subject/action اور timestamp دکھاتے ہیں۔',
-          '`POST /api/webmail/activity-log` دستاویزی read راستہ ہے؛ ops correlations `/api/ops/events` میں ہیں۔',
+          'Write راستہ `POST /api/webmail/activity` ہے؛ read راستہ `GET /api/webmail/activity-log` (Mail Activity) ہے، جبکہ Activity Logs `GET /api/activity-logs` استعمال کرتا ہے۔ Ops correlations `/api/ops/events` میں ہیں۔',
           'ایک دستی actor row DB/API سطح پر تصدیق ہوئی؛ براؤزر اسکرین شاٹ محفوظ نہیں ہوا۔',
         ],
       },
@@ -594,7 +594,7 @@ const CONTENT = {
         items: [
           'Live Operations — Ops Console کے `/api/ops/*` endpoints کے ساتھ `/api/health` چیکس اور queue depth۔',
           'IMAP Status — `/admin/imap-status` ہر 30 s پر poll کرتا ہے اور `idle`، `reconnecting`، `error`، `paused`، reconnect attempts اور آخری چیک دکھاتا ہے۔',
-          'Activity Logs — `/activity-logs` `/api/webmail/activity-log` پڑھتا ہے اور actor، mailbox، subject/action اور timestamp دکھاتا ہے۔',
+          'Activity Logs — `/activity-logs` `GET /api/activity-logs` پڑھتا ہے اور actor، mailbox، subject/action اور timestamp دکھاتا ہے۔',
           'Mail Activity — `mailbox_activity` اور `ops_events` سے درست actor والی rows، جن میں Mail Activity صفحہ بھی شامل ہے۔',
           'Login History — `login_audits` اندراجات جیسے `login_success`، IP اور timestamp کے ساتھ۔',
           'Queue Monitor — Redis queue workers (`alphaspace-queue*`)، `/api/health` میں `queue_depth` اور روزانہ `queue:prune-failed`۔',
@@ -615,7 +615,7 @@ const CONTENT = {
               '`brands` ٹیبل کے فیلڈز: `domain`، `name`، `status`، `lead_id`، `team_id`، `created_by`۔',
               'مقصد: ہر ڈومین کے لیے access policy، زنجیر `domain → team lead → team → mailboxes` کے مطابق۔',
               'Auto-assign preview `POST /api/email-accounts/auto-assign-preview` کو کال کرتا ہے اور حقیقی backend ڈیٹا سے دکھاتا ہے کہ کون سے صارفین کو رسائی حاصل ہوگی۔',
-              'حالیہ حالت: ایک برانڈ `alphatach.com`، جس کا `lead_id` NULL اور `team_id` NULL ہے (ابھی لیڈ/ٹیم ترتیب نہیں دی گئی)۔',
+              'حالیہ حالت براہِ راست ڈیٹا پر منحصر ہے؛ ہر ڈومین کے لیے ترتیب شدہ لیڈ اور ٹیم کی تصدیق `/brands` میں کریں۔',
             ],
           },
           {
@@ -641,7 +641,7 @@ const CONTENT = {
               'کردار: `super-admin` (سب کچھ)، `admin` (آپریشنز)، `team-lead` (اپنی ٹیم)، `user` (صرف تفویض شدہ mailboxes)۔',
               'اعمال: صارف تخلیق (`name`/`email`/`password`/`role`)، `name`/`email`/`role` میں ترمیم، suspend، unsuspend، soft delete (Trash)، restore، force delete، bulk actions۔',
               'Mailbox کی تفویض Accounts صفحے پر `email_account_user` کے ذریعے `can_send` اور `can_receive` پرچموں کے ساتھ ہوتی ہے۔',
-              'حالیہ حالت: دونوں حقیقی اکاؤنٹس (`i.T@alphatach.com` اور `it.support@alphatach.com`) `super-admin` صارف کو `can_send=1` اور `can_receive=1` کے ساتھ تفویض ہیں، اس لیے نئے میل کی اطلاعات فی الحال اسی ایڈمن کو جاتی ہیں۔',
+              'موجودہ mailbox تفویض اور اطلاع وصول کرنے والے براہِ راست `email_account_user` ڈیٹا پر منحصر ہیں؛ یہ ماننے سے پہلے کہ اطلاعات کس کو ملتی ہیں، Accounts/Users میں تصدیق کریں۔',
             ],
           },
           {
@@ -649,7 +649,7 @@ const CONTENT = {
             numbered: true,
             items: [
               '`/users` میں `team-lead` کردار کا صارف بنائیں۔',
-              '`/brands` میں `alphatach.com` برانڈ پر وہ لیڈ مقرر کریں (یا نیا برانڈ بنائیں)۔',
+              '`/brands` میں ہدف برانڈ پر وہ لیڈ مقرر کریں (یا نیا برانڈ بنائیں)۔',
               '`/teams` میں برانڈ کے تحت ٹیم بنائیں اور ارکان شامل کریں۔',
               'Accounts صفحے پر ان ارکان کو mailboxes تفویض کریں، `can_receive=1` کے ساتھ۔',
               '`/team-overview` میں تصدیق کریں اور اس کی member-derivation حد کو ذہن میں رکھیں۔',
@@ -709,7 +709,7 @@ const CONTENT = {
         items: [
           '`10.20.30.250` کے لیے خود دستخط شدہ TLS: سرٹیفکیٹ میں IP + DNS SANs ہیں، لیکن کلائنٹس کو داخلی/خود دستخط شدہ CA پر اعتبار کرنا پڑتا ہے؛ سادہ IP کے لیے عوامی CA کا اعتبار دستیاب نہیں ہے۔',
           '`APP_KEY` جان بوجھ کر rotate نہیں کی گئی تاکہ موجودہ encrypted mailbox credentials قابلِ خواندہ رہیں؛ پرانی git history صاف نہیں کی گئی۔',
-          '800 اکاؤنٹس والا رن ڈمی upstream کے ساتھ seeded mirror rows پر throughput/contention ٹیسٹ تھا؛ حقیقی IMAP بوجھ، فراہم کنندہ کی شرح حد اور 800 براؤزر سیشنز ابھی ثابت نہیں ہوئے۔',
+          'زیادہ حجم کے mirror contention ٹیسٹ ڈمی upstream کے ساتھ seeded ڈیٹا پر کیے گئے تھے؛ حقیقی IMAP بوجھ، فراہم کنندہ کی شرح حدیں اور بڑی تعداد میں بیک وقت براؤزر سیشنز ابھی ثابت نہیں ہوئے۔',
           'Horizon انسٹال نہیں ہے؛ queue workers systemd units (`alphaspace-queue*`، `alphaspace-idle@*`) اور `/api/health` کے ذریعے منجمنٹ ہوتے ہیں۔',
           'صرف SMTP والی منتقلی کی بحالی بہترین کوشش ہے: خودکار بحالی IMAP ناکامی پر شروع ہوتی ہے، ہفتہ وار چیک صرف الرٹ دیتا ہے، اور Recheck قابلِ اعتماد راستہ ہے؛ درست اور دوبارہ بھیجے جانے تک rows `pushed_to_server_at IS NULL` رہتے ہیں۔',
           '2026-11-26 کو دیکھا گیا حقیقی کنفیگریشن خامی: بیک اینڈ `.env` میں `APP_ENV=local` اور `APP_DEBUG=true` تھا؛ عوامی سامنے آنے سے پہلے پیداواری قدریں سیٹ کریں۔',

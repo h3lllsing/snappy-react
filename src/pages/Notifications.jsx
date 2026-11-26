@@ -46,15 +46,14 @@ export default function Notifications() {
   // The list and unread badge are the confirmation; no toast is needed.
   const handleMarkRead = id => markRead(id)
 
-  const markAll = () => {
+  const markAll = async () => {
     setBusy(true)
-    markAllRead()
-    setTimeout(() => setBusy(false), 250)
+    try { await markAllRead() } finally { setBusy(false) }
   }
 
-  const handleDelete = id => toggleDeleted(id)
+  const handleDelete = id => toggleDeleted(id, false)
 
-  const handleRestore = id => toggleDeleted(id)
+  const handleRestore = id => toggleDeleted(id, true)
 
   return (
     <div className="animate-fade-up">
@@ -95,7 +94,7 @@ export default function Notifications() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                  {n.type === 'new_email' && tab !== 'trash' && (
+                  {(n.type === 'new_email' || n.type === 'App\\Events\\NewEmailArrived') && tab !== 'trash' && (
                     <Button size="sm" variant="secondary" onClick={() => openWebmail(n.account_id)}><ExternalLink size={12} /> Open in SnappyMail</Button>
                   )}
                   {tab === 'trash' ? (

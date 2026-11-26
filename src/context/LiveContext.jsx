@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { navigateTo } from '../lib/navigation'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
+import { useToast } from '../components/ui'
 
 const LiveCtx = createContext(null)
 
@@ -21,6 +22,7 @@ const mergeRows = (current, incoming, keyOf) => {
 }
 
 export function LiveProvider({ children }) {
+  const toast = useToast()
   // The API is the only source of live state: an empty backend renders empty.
   const [mails, setMails] = useState([])
   const [notifications, setNotifications] = useState([])
@@ -36,7 +38,7 @@ export function LiveProvider({ children }) {
       mailRows.forEach(row => seenMailRef.current.add(mailKey(row)))
       setMails(prev => mergeRows(prev, mailRows, mailKey))
       setNotifications(prev => mergeRows(prev, notificationRows, notificationKey))
-    }).catch(() => {})
+    }).catch(e => { if (alive) toast('Could not load live data: ' + describeApiError(e), 'error') })
     return () => { alive = false }
   }, [])
 
@@ -76,26 +78,49 @@ export function LiveProvider({ children }) {
     setPulse(p => p + 1)
   }, [])
 
-  const markRead = useCallback((id) => {
+  const markRead = useCallback(async (id) => {
     const key = String(id)
-    api.markNotificationRead(id).catch(() => {})
+    const isSynthetic = key.startsWith('live-')
+    if (!isSynthetic) {
+      try {
+        await api.markNotificationRead(id)
+      } catch (e) {
+        toast('Could not mark notification as read: ' + describeApiError(e), 'error')
+        return
+      }
+    }
     setNotifications(prev => prev.map(n => notificationKey(n) === key ? { ...n, read: true } : n))
     setMails(prev => prev.map(m => {
       const rowKey = mailKey(m)
       return rowKey === key || String(m.id) === key ? { ...m, unread: false } : m
     }))
-  }, [])
+  }, [toast])
 
-  const markAllRead = useCallback(() => {
-    api.markAllRead().catch(() => {})
+  const markAllRead = useCallback(async () => {
+    try {
+      await api.markAllRead()
+    } catch (e) {
+      toast('Could not mark all notifications as read: ' + describeApiError(e), 'error')
+      return
+    }
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setMails(prev => prev.map(m => ({ ...m, unread: false })))
-  }, [])
+  }, [toast])
 
-  const toggleDeleted = useCallback((id) => {
+  const toggleDeleted = useCallback(async (id, restore) => {
     const key = String(id)
-    setNotifications(prev => prev.map(n => notificationKey(n) === key ? { ...n, deleted: !n.deleted } : n))
-  }, [])
+    const row = notifications.find(n => notificationKey(n) === key)
+    const shouldRestore = typeof restore === 'boolean' ? restore : !!row?.deleted
+    const prevNotifications = notifications
+    setNotifications(prev => prev.map(n => notificationKey(n) === key ? { ...n, deleted: !shouldRestore } : n))
+    try {
+      if (shouldRestore) await api.restoreNotification(id)
+      else await api.deleteNotification(id)
+    } catch (e) {
+      setNotifications(prevNotifications)
+      toast((shouldRestore ? 'Could not restore notification: ' : 'Could not delete notification: ') + describeApiError(e), 'error')
+    }
+  }, [notifications, toast])
 
   const openWebmail = useCallback((accountId) => navigateTo(`/webmail/${accountId || 1}`), [])
 

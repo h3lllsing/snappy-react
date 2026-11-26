@@ -4,7 +4,7 @@ import { ArrowLeft, Bell, ChevronDown, Globe2, Mail, Maximize2, Minimize2, Searc
 import { useToast } from '../components/ui'
 import { useLive } from '../context/LiveContext'
 import { useAuth } from '../context/AuthContext'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 const accountDomain = acc => (acc.email || '').split('@')[1] || ''
 
@@ -65,10 +65,20 @@ export default function Webmail() {
   }, [toast])
 
   useEffect(() => {
+    let alive = true
     api.domainAccess()
-      .then(d => { if (d) setAccessData(d) })
-      .catch(() => {})
-  }, [])
+      .then(d => {
+        if (!alive) return
+        const normalized = Array.isArray(d)
+          ? { scope: 'assigned', domains: d }
+          : (d && typeof d === 'object'
+            ? { scope: d.scope ?? 'assigned', domains: Array.isArray(d.domains) ? d.domains : [] }
+            : { scope: 'assigned', domains: [] })
+        setAccessData(normalized)
+      })
+      .catch(e => { if (alive) toast('Could not load domain access: ' + describeApiError(e), 'error') })
+    return () => { alive = false }
+  }, [toast])
 
   useEffect(() => {
     const onMessage = e => {
