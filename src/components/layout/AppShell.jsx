@@ -38,6 +38,7 @@ const NAV = [
     { to: '/workflow', label: 'Portal Workflow', icon: BookOpen, roles: ['super-admin'] },
     { to: '/qa', label: 'Q&A Audit', icon: ShieldCheck, roles: ['super-admin'] },
     { to: '/qa2', label: 'Q&A Audit 2', icon: ShieldCheck, roles: ['super-admin'] },
+    { to: '/qa3', label: 'Q&A Audit 3', icon: ShieldCheck, roles: ['super-admin'] },
   ]},
 ]
 
