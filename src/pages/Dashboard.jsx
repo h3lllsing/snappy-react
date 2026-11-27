@@ -67,11 +67,16 @@ export default function Dashboard() {
   const firstAccountFor = (domain) => accounts.find(a => a.brand === domain)?.id
   const healthy = stats ? (stats.failed_imap_accounts || 0) === 0 : null
   const pausedDomains = brands.filter(b => b.status === 'suspended').length
+  // Links follow the route guards in App.jsx; the cards themselves remain visible.
+  const role = user?.role
+  const isSuperAdmin = role === 'super-admin'
+  const canUsers = isSuperAdmin || role === 'admin'
+  const canDomains = canUsers || role === 'team-lead'
 
   const attention = [
-    ...(stats?.failed_imap_accounts ? [{ label: `${stats.failed_imap_accounts} IMAP failure`, to: '/imap-status', variant: 'danger' }] : []),
-    ...(stats?.suspended_users ? [{ label: `${stats.suspended_users} suspended user`, to: '/users', variant: 'warning' }] : []),
-    ...(pausedDomains ? [{ label: `${pausedDomains} suspended domain`, to: '/domains', variant: 'warning' }] : []),
+    ...(stats?.failed_imap_accounts && isSuperAdmin ? [{ label: `${stats.failed_imap_accounts} IMAP failure`, to: '/imap-status', variant: 'danger' }] : []),
+    ...(stats?.suspended_users && canUsers ? [{ label: `${stats.suspended_users} suspended user`, to: '/users', variant: 'warning' }] : []),
+    ...(pausedDomains && canDomains ? [{ label: `${pausedDomains} suspended domain`, to: '/domains', variant: 'warning' }] : []),
     ...(unread ? [{ label: `${unread} unread notification`, to: '/notifications', variant: 'info' }] : []),
   ]
 
@@ -89,12 +94,12 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6 mb-5">
         {available.stats ? <>
-          <StatCard label="Users" value={stats?.total_users} icon={Users} tone="indigo" sub="Across all teams" onClick={() => navigate('/users')} />
-          <StatCard label="Email Accounts" value={stats?.total_accounts} icon={Mail} tone="sky" sub="Configured mailboxes" onClick={() => navigate('/accounts')} />
-          <StatCard label="Active Domains" value={stats?.active_domains} icon={Globe2} tone="emerald" sub="Connected domains" onClick={() => navigate('/domains')} />
+          <StatCard label="Users" value={stats?.total_users} icon={Users} tone="indigo" sub="Across all teams" onClick={canUsers ? () => navigate('/users') : undefined} />
+          <StatCard label="Email Accounts" value={stats?.total_accounts} icon={Mail} tone="sky" sub="Configured mailboxes" onClick={canUsers ? () => navigate('/accounts') : undefined} />
+          <StatCard label="Active Domains" value={stats?.active_domains} icon={Globe2} tone="emerald" sub="Connected domains" onClick={canDomains ? () => navigate('/domains') : undefined} />
           <StatCard label="Unread Notifications" value={unread} icon={Bell} tone="indigo" sub={`of ${stats?.total_notifications ?? 0} total`} onClick={() => navigate('/notifications')} />
-          <StatCard label="Failed IMAP" value={stats?.failed_imap_accounts} icon={Server} tone="red" sub="Needs attention" onClick={() => navigate('/imap-status')} />
-          <StatCard label="Suspended Users" value={stats?.suspended_users} icon={UserX} tone="amber" sub="Access blocked" onClick={() => navigate('/users')} />
+          <StatCard label="Failed IMAP" value={stats?.failed_imap_accounts} icon={Server} tone="red" sub="Needs attention" onClick={isSuperAdmin ? () => navigate('/imap-status') : undefined} />
+          <StatCard label="Suspended Users" value={stats?.suspended_users} icon={UserX} tone="amber" sub="Access blocked" onClick={canUsers ? () => navigate('/users') : undefined} />
         </> : <div className="col-span-full"><Unavailable label="Workspace statistics" /></div>}
       </div>
 
@@ -110,11 +115,11 @@ export default function Dashboard() {
               : `${stats?.failed_imap_accounts} mailbox failed IMAP authentication and was auto-paused. New mail for that domain is not being delivered.`}
           </p>
         </div>
-        <Link to="/imap-status">
+        {isSuperAdmin && <Link to="/imap-status">
           <Button size="sm" variant={healthy ? 'secondary' : 'danger'}>
             {healthy ? 'View health' : 'Review IMAP status'} <ArrowUpRight size={14} />
           </Button>
-        </Link>
+        </Link>}
       </div>}
 
       <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -180,7 +185,7 @@ export default function Dashboard() {
         </Card>
 
         <Card className="lg:col-span-2 overflow-hidden">
-          <CardHeader title="My Brands" subtitle="Domains you own and their coverage." actions={<Link to="/brands"><Button size="sm" variant="ghost">Matrix →</Button></Link>} />
+          <CardHeader title="My Brands" subtitle="Domains you own and their coverage." actions={canUsers && <Link to="/brands"><Button size="sm" variant="ghost">Matrix →</Button></Link>} />
           <CardBody className="space-y-3">
             {!available.brands && <Unavailable label="Brand coverage" />}
             {available.brands && brands.map(brand => {
@@ -219,7 +224,7 @@ export default function Dashboard() {
       </div>
 
       <Card className="mt-5">
-        <CardHeader title="Recent activity" subtitle="Latest actions across the workspace." actions={<Link to="/activity-logs"><Button size="sm" variant="ghost">All activity →</Button></Link>} />
+        <CardHeader title="Recent activity" subtitle="Latest actions across the workspace." actions={isSuperAdmin && <Link to="/activity-logs"><Button size="sm" variant="ghost">All activity →</Button></Link>} />
         <CardBody className="p-0">
           {!available.activities && <div className="p-5"><Unavailable label="Recent activity" /></div>}
           {available.activities && activities.map(a => (

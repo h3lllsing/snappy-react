@@ -205,7 +205,7 @@ export default function OpsConsole() {
                 {issue.status === 'open' && <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'ack')}><Check size={13} /> Ack</Button>}
                 <Button size="sm" variant="secondary" onClick={() => openAssign(issue.id)}><UserPlus size={13} /> Assign</Button>
                 <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'start')}><Play size={13} /> Start</Button>
-                <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'snooze')}><Clock size={13} /> Snooze</Button>
+                <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'snooze', { minutes: 60 })}><Clock size={13} /> Snooze</Button>
                 <Button size="sm" variant="secondary" onClick={() => openTimeline(issue.id)}><Clock size={13} /> Timeline</Button>
                 <Button size="sm" variant="success" onClick={() => act(issue.id, 'resolve', { note: 'Resolved from Ops Console' })}><Check size={13} /> Resolve</Button>
                 {issue.status !== 'closed' && <Button size="sm" variant="secondary" onClick={() => act(issue.id, 'close')}><X size={13} /> Close</Button>}

@@ -107,6 +107,10 @@ export function AuthProvider({ children }) {
     failuresRef.current = 0
     if (timerRef.current) clearTimeout(timerRef.current)
 
+    // The session token now exists: retry the initial live fetch that ran
+    // before this provider mounted and may have been rejected with a 401.
+    liveRef.current?.reload?.()
+
     const clearTimer = () => {
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null

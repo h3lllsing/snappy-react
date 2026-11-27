@@ -29,18 +29,23 @@ export function LiveProvider({ children }) {
   const [pulse, setPulse] = useState(0)
   const seenMailRef = useRef(new Set())
 
-  useEffect(() => {
-    let alive = true
-    Promise.all([api.mails(), api.notifications()]).then(([m, n]) => {
-      if (!alive) return
+  // LiveProvider is mounted before AuthProvider, so the first fetch can race
+  // the bearer token. A 401 is silent here; AuthContext retries once the user
+  // id is known through this same stable callback.
+  const reload = useCallback(async () => {
+    try {
+      const [m, n] = await Promise.all([api.mails(), api.notifications()])
       const mailRows = Array.isArray(m) ? m : []
       const notificationRows = Array.isArray(n) ? n : []
       mailRows.forEach(row => seenMailRef.current.add(mailKey(row)))
       setMails(prev => mergeRows(prev, mailRows, mailKey))
       setNotifications(prev => mergeRows(prev, notificationRows, notificationKey))
-    }).catch(e => { if (alive) toast('Could not load live data: ' + describeApiError(e), 'error') })
-    return () => { alive = false }
-  }, [])
+    } catch (e) {
+      if (e?.status !== 401) toast('Could not load live data: ' + describeApiError(e), 'error')
+    }
+  }, [toast])
+
+  useEffect(() => { reload() }, [reload])
 
   const unread = useMemo(() => notifications.filter(n => !n.read && !n.deleted).length, [notifications])
   const inboxUnread = useMemo(() => mails.filter(m => m.unread).length, [mails])
@@ -128,8 +133,8 @@ export function LiveProvider({ children }) {
   // down and recreated on every mail that arrives.
   const value = useMemo(() => ({
     mails, notifications, unread, inboxUnread, pulse,
-    addIncoming, markRead, markAllRead, toggleDeleted, openWebmail,
-  }), [mails, notifications, pulse, unread, inboxUnread, addIncoming, markRead, markAllRead, toggleDeleted, openWebmail])
+    addIncoming, markRead, markAllRead, toggleDeleted, openWebmail, reload,
+  }), [mails, notifications, pulse, unread, inboxUnread, addIncoming, markRead, markAllRead, toggleDeleted, openWebmail, reload])
 
   return <LiveCtx.Provider value={value}>{children}</LiveCtx.Provider>
 }

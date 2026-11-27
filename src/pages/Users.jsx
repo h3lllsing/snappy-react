@@ -11,7 +11,7 @@ import {
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api, { describeApiError } from '../lib/api'
 
-const emptyForm = { name: '', email: '', password: '', role: 'user', team_lead_id: '', status: 'active' }
+const emptyForm = { name: '', email: '', password: '', role: 'user' }
 
 export default function Users() {
   const toast = useToast()
@@ -73,7 +73,7 @@ export default function Users() {
   const openAdd = () => { setEditing(null); setForm(emptyForm); setAddOpen(true) }
   const openEdit = u => {
     setEditing(u)
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, team_lead_id: u.team_lead_id ? String(u.team_lead_id) : '', status: u.status })
+    setForm({ name: u.name, email: u.email, password: '', role: u.role })
     setAddOpen(true)
   }
 
@@ -264,26 +264,12 @@ export default function Users() {
           <Field label={editing ? 'New password (optional)' : 'Password'} required={!editing}>
             <Input type="password" value={form.password} onChange={set('password')} placeholder="••••••••" />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Role" required hint="Controls which pages and actions this user can reach.">
-              <Select value={form.role} onChange={set('role')}>
-                <option value="user">user</option>
-                <option value="team-lead">team-lead</option>
-                <option value="admin">admin</option>
-                <option value="super-admin">super-admin</option>
-              </Select>
-            </Field>
-            <Field label="Team lead" hint="Assigns the user to the lead's team and mailboxes.">
-              <Select value={form.team_lead_id} onChange={set('team_lead_id')}>
-                <option value="">No team lead</option>
-                {leads.map(l => <option key={l.id} value={l.id}>{l.name} · {l.team}</option>)}
-              </Select>
-            </Field>
-          </div>
-          <Field label="Status">
-            <Select value={form.status} onChange={set('status')}>
-              <option value="active">active</option>
-              <option value="suspended">suspended</option>
+          <Field label="Role" required hint="Controls which pages and actions this user can reach.">
+            <Select value={form.role} onChange={set('role')}>
+              <option value="user">user</option>
+              <option value="team-lead">team-lead</option>
+              <option value="admin">admin</option>
+              <option value="super-admin">super-admin</option>
             </Select>
           </Field>
         </form>

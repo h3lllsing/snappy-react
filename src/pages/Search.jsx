@@ -15,11 +15,16 @@ export default function Search() {
 
   useEffect(() => {
     let alive = true
-    Promise.all([api.users(), api.accounts(), api.domains(), api.brands()])
-      .then(([users, accounts, domains, brands]) => {
-        if (alive) setData({ users, accounts, domains, brands })
+    // Users is admin-only; a 403 must not discard accounts/domains/brands.
+    Promise.allSettled([api.users(), api.accounts(), api.domains(), api.brands()])
+      .then(results => {
+        if (!alive) return
+        const [users, accounts, domains, brands] = results.map(r => r.status === 'fulfilled' ? r.value : [])
+        setData({ users, accounts, domains, brands })
+        if (results.some(r => r.status === 'rejected' && Number(r.reason?.status) !== 403)) {
+          toast('Could not load some search data. Please try again.', 'error', { title: 'Search unavailable' })
+        }
       })
-      .catch(() => { if (alive) toast('Could not load search data. Please try again.', 'error', { title: 'Search unavailable' }) })
     return () => { alive = false }
   }, [toast])
 

@@ -32,9 +32,16 @@ export default function TeamOverview() {
   }
   useEffect(() => {
     let alive = true
-    Promise.all([api.teams(), api.users(), api.accounts(), api.brands()])
-      .then(([t, u, a, b]) => { if (!alive) return; setTeams(t); setUsers(u); setAccounts(a); setBrands(b) })
-      .catch(() => { if (alive) toast('Could not load team overview.', 'error', { title: 'Load failed' }) })
+    // Users is admin-only; a team lead must still see teams and accounts.
+    Promise.allSettled([api.teams(), api.users(), api.accounts(), api.brands()])
+      .then(results => {
+        if (!alive) return
+        const [t, u, a, b] = results.map(r => r.status === 'fulfilled' ? r.value : [])
+        setTeams(t); setUsers(u); setAccounts(a); setBrands(b)
+        if (results.some(r => r.status === 'rejected' && Number(r.reason?.status) !== 403)) {
+          toast('Could not load all team overview data.', 'error', { title: 'Load failed' })
+        }
+      })
     return () => { alive = false }
   }, [toast])
 

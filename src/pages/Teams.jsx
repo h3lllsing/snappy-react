@@ -8,6 +8,7 @@ import {
   PageHeader, Select, useToast,
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
+import { useAuth } from '../context/AuthContext'
 import api, { describeApiError } from '../lib/api'
 
 // Only use member identities when the backend actually returns pivot rows.
@@ -26,6 +27,8 @@ const emptyForm = { name: '', brand_id: '', lead_id: '' }
 
 export default function Teams() {
   const toast = useToast()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'super-admin' || user?.role === 'admin'
   const [teams, setTeams] = useState([])
   const [brands, setBrands] = useState([])
   const [users, setUsers] = useState([])
@@ -56,13 +59,17 @@ export default function Teams() {
 
   useEffect(() => {
     let alive = true
-    Promise.all([api.teams(), api.brands(), api.users()])
-      .then(([t, b, u]) => {
+    // Users is admin-only; team leads must still see teams and brands.
+    Promise.allSettled([api.teams(), api.brands(), api.users()])
+      .then(results => {
         if (!alive) return
+        const [t, b, u] = results.map(r => r.status === 'fulfilled' ? r.value : [])
         setTeams(t); setBrands(b); setUsers(u)
         setMemberIds(Object.fromEntries(t.map(team => [team.id, pivotMemberIds(team)])))
+        if (results.some(r => r.status === 'rejected' && Number(r.reason?.status) !== 403)) {
+          toast('Could not load all team data.', 'error', { title: 'Load failed' })
+        }
       })
-      .catch(() => { if (alive) toast('Could not load teams.', 'error', { title: 'Load failed' }) })
     return () => { alive = false }
   }, [toast])
 
@@ -148,7 +155,7 @@ export default function Teams() {
             <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search teams…" className="pl-9 w-56" />
           </div>
           <Link to="/team-overview"><Button variant="secondary">Team Overview <ArrowUpRight size={15} /></Button></Link>
-          <Button onClick={() => setAddOpen(true)}><Plus size={16} /> Add Team</Button>
+          {isAdmin && <Button onClick={() => setAddOpen(true)}><Plus size={16} /> Add Team</Button>}
         </>}
       />
 
@@ -215,16 +222,16 @@ export default function Teams() {
                           <p className="text-[10px] text-muted truncate">{m.email}</p>
                         </div>
                         <Badge role={m.role} className="text-[10px]">{m.role}</Badge>
-                        <Button size="sm" variant="ghost" title="Remove member" onClick={() => removeMember(team, m.id)}><Trash2 size={13} className="text-red-500" /></Button>
+                        {isAdmin && <Button size="sm" variant="ghost" title="Remove member" onClick={() => removeMember(team, m.id)}><Trash2 size={13} className="text-red-500" /></Button>}
                       </div>
                     ))}
-                    <div className="flex items-center gap-2 pt-1">
+                    {isAdmin && <div className="flex items-center gap-2 pt-1">
                       <Select value={memberPick[team.id] || ''} onChange={e => setMemberPick(prev => ({ ...prev, [team.id]: e.target.value }))} className="flex-1">
                         <option value="">Select a user to add…</option>
                         {users.filter(u => !u.deleted_at).map(u => <option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
                       </Select>
                       <Button size="sm" onClick={() => addMember(team)}><Plus size={13} /> Add member</Button>
-                    </div>
+                    </div>}
                   </div>
                 )}
               </div>
@@ -239,7 +246,7 @@ export default function Teams() {
       </div>
 
       <Modal
-        open={addOpen}
+        open={isAdmin && addOpen}
         onClose={() => setAddOpen(false)}
         title="Add team"
         footer={<>

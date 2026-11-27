@@ -66,11 +66,12 @@ export const api = {
   updateAccount: async (id, data, updatedAt) =>
     put(`/email-accounts/${id}`, updatedAt ? { ...data, updated_at: updatedAt } : data),
   deleteAccount: async (id) => remove(`/email-accounts/${id}`),
+  restoreAccount: async (id) => post(`/email-accounts/${id}/restore`),
   assignAccount: async (accountId, userId) =>
     patch(`/email-accounts/${accountId}/assign/${userId}`, { can_send: true, can_receive: true }),
   revokeAssignment: async (accountId, userId) =>
     remove(`/email-accounts/${accountId}/assign/${userId}`),
-  syncAccount: async (id) => patch(`/email-accounts/${id}/sync`),
+  syncAccount: async (id) => post(`/email-accounts/${id}/sync-now`),
   rediscover: async (id) => post(`/email-accounts/${id}/rediscover`),
   webmailToken: async (accountId) => post(`/email-accounts/${accountId}/webmail-token`),
   setDomainSync: async (id, payload) => patch(`/domains/${id}/sync`, payload),

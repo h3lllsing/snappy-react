@@ -11,6 +11,9 @@ import {
 import { Breadcrumbs } from '../components/layout/AppShell'
 import api, { describeApiError } from '../lib/api'
 
+// Backend exposes soft-deleted rows with a `deleted` flag and `deleted_at`.
+const isDeleted = (account) => Boolean(account?.deleted || account?.deleted_at)
+
 const emptyForm = {
   email: '', password: '', brand_id: '', domain_id: '', status: 'active',
   sync_enabled: true, imap_host: '', imap_port: '993', imap_encryption: 'ssl',
@@ -66,13 +69,13 @@ export default function Accounts() {
   }, [addOpen, form.brand_id, editing])
 
   const counts = useMemo(() => ({
-    active: accounts.filter(a => !a.deleted).length,
-    trash: accounts.filter(a => a.deleted).length,
+    active: accounts.filter(a => !isDeleted(a)).length,
+    trash: accounts.filter(a => isDeleted(a)).length,
   }), [accounts])
 
   const filtered = useMemo(() => {
     const list = accounts.filter(a => {
-      if (tab === 'trash' ? !a.deleted : a.deleted) return false
+      if (tab === 'trash' ? !isDeleted(a) : isDeleted(a)) return false
       if (brandFilter && String(a.brand_id) !== String(brandFilter) && a.brand !== brandFilter) return false
       if (statusFilter && a.status !== statusFilter) return false
       if (assignedFilter && !(a.assigned || []).map(String).includes(String(assignedFilter))) return false
@@ -196,11 +199,11 @@ export default function Accounts() {
     try {
       if (action === 'delete') {
         await api.updateAccount(account.id, { deleted: true }, account.updated_at)
-        setAccounts(prev => prev.map(a => a.id === account.id ? { ...a, deleted: true } : a))
+        setAccounts(await api.accounts())
         toast(`${account.email} moved to trash.`, 'success', { title: 'Account deleted' })
       } else if (action === 'restore') {
-        await api.updateAccount(account.id, { deleted: false }, account.updated_at)
-        setAccounts(prev => prev.map(a => a.id === account.id ? { ...a, deleted: false } : a))
+        await api.restoreAccount(account.id)
+        setAccounts(await api.accounts())
         toast(`${account.email} restored.`, 'success', { title: 'Account restored' })
       } else {
         await api.deleteAccount(account.id)
@@ -301,7 +304,7 @@ export default function Accounts() {
                     </div>
                   </Td>
                   <Td><Badge variant="default" className="text-[10px]"><Globe2 size={10} /> {a.brand}</Badge></Td>
-                  <Td><Badge variant={a.deleted ? 'danger' : a.status} dot className="text-[10px]">{a.deleted ? 'trashed' : a.status}</Badge></Td>
+                  <Td><Badge variant={isDeleted(a) ? 'danger' : a.status} dot className="text-[10px]">{isDeleted(a) ? 'trashed' : a.status}</Badge></Td>
                   <Td>
                     {a.last_sync === 'live' ? (
                       <Badge variant="success" dot="live" className="text-[10px]">Live</Badge>

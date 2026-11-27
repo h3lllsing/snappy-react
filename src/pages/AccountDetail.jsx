@@ -10,7 +10,7 @@ import {
 } from '../components/ui'
 import { Breadcrumbs } from '../components/layout/AppShell'
 import { useLive } from '../context/LiveContext'
-import api from '../lib/api'
+import api, { describeApiError } from '../lib/api'
 
 export default function AccountDetail() {
   const { id } = useParams()
@@ -114,11 +114,19 @@ export default function AccountDetail() {
   const syncNow = async () => {
     setSyncing(true)
     try {
-      await api.syncAccount(account.id)
-      setAccount(prev => ({ ...prev, sync: 'syncing', last_sync: 'now' }))
-      toast(`Syncing ${account.email}…`, 'success', { title: 'Sync started' })
-    } catch {
-      toast('Could not start sync.', 'error', { title: 'Sync failed' })
+      const result = await api.syncAccount(account.id)
+      if (result?.dispatched === false) throw new Error('Sync was not dispatched')
+      toast(`Sync requested for ${account.email}.`, 'success', { title: 'Sync requested' })
+      // Read the authoritative sync status back; never fake a local "syncing" state.
+      try {
+        const refreshed = await api.accounts()
+        const found = refreshed.find(x => String(x.id) === String(id))
+        if (found) setAccount(found)
+      } catch {
+        toast('Sync requested, but the account status could not be refreshed.', 'warning', { title: 'Refresh failed' })
+      }
+    } catch (err) {
+      toast(describeApiError(err, 'Could not request sync.'), 'error', { title: 'Sync request failed' })
     } finally {
       setSyncing(false)
     }
@@ -197,7 +205,7 @@ export default function AccountDetail() {
             <CardHeader
               title="Mailbox details"
               subtitle="Transport settings and current sync state."
-              actions={<Badge variant={account.deleted ? 'danger' : account.status} dot className="text-[10px]">{account.deleted ? 'trashed' : account.status}</Badge>}
+              actions={<Badge variant={(account.deleted || account.deleted_at) ? 'danger' : account.status} dot className="text-[10px]">{(account.deleted || account.deleted_at) ? 'trashed' : account.status}</Badge>}
             />
             <CardBody>
               <div className="flex items-center gap-4 mb-5">
