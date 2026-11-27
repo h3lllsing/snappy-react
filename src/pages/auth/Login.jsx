@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck, Sparkles } from 'lucide-react'
 import { Alert, Button, Checkbox, Field, Input, useToast } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
+import { api, setBearerToken } from '../../lib/api'
 
 export default function Login() {
   const { login } = useAuth()
@@ -14,6 +15,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mfaChallenge, setMfaChallenge] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
 
   const submit = async (e) => {
     e.preventDefault()
@@ -26,14 +29,45 @@ export default function Login() {
     try {
       const res = await login({ email, password, remember })
       localStorage.setItem('remember_me', remember ? 'true' : 'false')
-      toast(`Welcome back, ${res.user.name.split(' ')[0]}!`, 'success', { title: 'Signed in successfully' })
-      if (res.must_change_password) {
-        navigate('/change-password', { replace: true })
-      } else {
-        navigate('/dashboard')
+      if (res?.mfa_required) {
+        // Challenge token is short-lived and only allows /mfa/verify + /logout.
+        setBearerToken(res.mfa_challenge)
+        setMfaChallenge(res.mfa_challenge)
+        setError('')
+        return
       }
+      finishLogin(res)
     } catch {
       setError('Unable to sign in. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const finishLogin = (res) => {
+    toast(`Welcome back, ${res.user.name.split(' ')[0]}!`, 'success', { title: 'Signed in successfully' })
+    if (res.must_change_password) {
+      navigate('/change-password', { replace: true })
+    } else {
+      navigate('/dashboard')
+    }
+  }
+
+  const submitMfa = async (e) => {
+    e.preventDefault()
+    if (!/^\d{6}$/.test(mfaCode)) {
+      setError('Enter the 6-digit code from your authenticator app.')
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      const res = await api.mfaVerify(mfaCode)
+      setMfaChallenge('')
+      setMfaCode('')
+      finishLogin(res)
+    } catch {
+      setError('Invalid or expired code. Try again or ask an administrator for a recovery code.')
     } finally {
       setLoading(false)
     }
@@ -86,6 +120,17 @@ export default function Login() {
               Sign in <ArrowRight size={16} />
             </Button>
           </form>
+
+          {mfaChallenge && (
+            <form onSubmit={submitMfa} className="mt-5 rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
+              <p className="text-sm font-semibold">Two-factor verification</p>
+              <p className="text-xs text-muted">Enter the 6-digit code from your authenticator app.</p>
+              <Field label="Authenticator code" required>
+                <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ''))} />
+              </Field>
+              <Button type="submit" size="sm" className="w-full" loading={loading}>Verify and sign in</Button>
+            </form>
+          )}
 
           {import.meta.env.VITE_USE_API !== 'true' && (
             <div className="mt-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 flex gap-2.5">

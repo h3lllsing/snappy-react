@@ -41,7 +41,7 @@ const ITEMS = [
   {
     section: 'A — CONFIG & SECRETS', q: '6. Sudo password rotation ka date aur owner?',
     status: 'FAIL',
-    evidence: 'Password abhi bhi Itrs*1234 hai (is audit me sudo -S se kaam chalaya). Rotation nahi hui. Owner: user (aapne kaha final ke baad karna hai). Date: TBD.',
+    evidence: 'Sudo password is report se hata diya gaya hai (secret output me nahi dikhanay ke liye). Rotation abhi nahi hui. Owner: user (aapne kaha final ke baad karna hai). Date: TBD.',
     next: 'Production GO ke turant baad aap rotate karein; naye password ko docs me na likhein.',
   },
   {

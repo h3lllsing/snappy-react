@@ -18,6 +18,8 @@ export default function Profile() {
   })
   const [loading, setLoading] = useState(false)
   const [show, setShow] = useState({ current: false, password: false, confirmation: false })
+  const [mfaSetup, setMfaSetup] = useState(null)
+  const [mfaCode, setMfaCode] = useState('')
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
   const toggleShow = (key) => () => setShow(s => ({ ...s, [key]: !s[key] }))
@@ -138,6 +140,46 @@ export default function Profile() {
         </div>
 
         <div className="space-y-5">
+          {['super-admin', 'admin', 'team-lead'].includes(user?.role) && (
+            <Card>
+              <CardHeader title="Two-factor authentication" subtitle="Required for privileged roles." />
+              <CardBody className="space-y-3">
+                <p className="text-xs text-muted">Scan the otpauth URI below with your authenticator app, then confirm a 6-digit code to enable TOTP.</p>
+                {mfaSetup && (
+                  <div className="rounded-lg border border-border bg-surface/40 p-3 break-all font-mono text-[11px]">
+                    {mfaSetup.otpauth_uri || mfaSetup.uri || 'Setup returned no URI.'}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={async () => {
+                    try {
+                      const res = await api.mfaSetup()
+                      setMfaSetup(res)
+                      toast('Scan the URI, then enter a code to enable.', 'info', { title: 'TOTP setup' })
+                    } catch (e) {
+                      toast('Could not start MFA setup.', 'error')
+                    }
+                  }}>Start setup</Button>
+                </div>
+                <Field label="6-digit code">
+                  <div className="flex gap-2">
+                    <Input inputMode="numeric" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ''))} placeholder="000000" />
+                    <Button size="sm" onClick={async () => {
+                      if (!/^\d{6}$/.test(mfaCode)) return toast('Enter a 6-digit code.', 'error')
+                      try {
+                        await api.mfaEnable(mfaCode)
+                        setMfaSetup(null)
+                        setMfaCode('')
+                        toast('Two-factor authentication enabled.', 'success')
+                      } catch (e) {
+                        toast('Invalid code.', 'error')
+                      }
+                    }}>Enable</Button>
+                  </div>
+                </Field>
+              </CardBody>
+            </Card>
+          )}
           <Card>
             <CardHeader title="Appearance" subtitle="Customize how the portal looks." />
             <CardBody>

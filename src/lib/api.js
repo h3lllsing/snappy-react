@@ -12,6 +12,8 @@ const query = (params) => {
   return search ? `?${search}` : ''
 }
 
+export { setBearerToken }
+
 // Shared by management screens so 404/409/422 produce real, readable toasts
 // instead of silently accepting a local change.
 export function describeApiError(err, fallback = 'The request could not be completed.') {
@@ -28,9 +30,23 @@ export const api = {
   me: async () => get('/user'),
   login: async ({ email, password }) => {
     const data = await post('/login', { email, password })
-    setBearerToken(data?.token)
+    if (data?.token) setBearerToken(data.token)
     return data
   },
+  // MFA challenge: /login returns mfa_required + a short-lived challenge token.
+  // Call setBearerToken(mfa_challenge) first, then verify below.
+  mfaVerify: async (code) => {
+    const data = await post('/mfa/verify', { code })
+    if (data?.token) setBearerToken(data.token)
+    return data
+  },
+  mfaRecovery: async (recoveryCode) => {
+    const data = await post('/mfa/recovery', { recovery_code: recoveryCode })
+    if (data?.token) setBearerToken(data.token)
+    return data
+  },
+  mfaSetup: async () => post('/mfa/setup', {}),
+  mfaEnable: async (code) => post('/mfa/enable', { code }),
   logout: async () => {
     try {
       return await post('/logout')
