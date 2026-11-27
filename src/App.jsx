@@ -33,6 +33,7 @@ const QueueMonitor = lazy(() => import('./pages/QueueMonitor'))
 const ImapStatus = lazy(() => import('./pages/ImapStatus'))
 const OpsConsole = lazy(() => import('./pages/OpsConsole'))
 const WorkflowGuide = lazy(() => import('./pages/WorkflowGuide'))
+const QaAudit = lazy(() => import('./pages/QaAudit'))
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth()
@@ -90,6 +91,7 @@ export default function App() {
         <Route path="/change-password" element={<Protected><ChangePassword /></Protected>} />
         <Route path="/ops" element={<Protected roles={['super-admin','admin']}><OpsConsole /></Protected>} />
         <Route path="/workflow" element={<Protected roles={['super-admin']}><WorkflowGuide /></Protected>} />
+        <Route path="/qa" element={<Protected roles={['super-admin']}><QaAudit /></Protected>} />
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<NotFound />} />
