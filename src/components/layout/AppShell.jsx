@@ -60,6 +60,7 @@ const NAV = [
     { to: '/qa22', label: 'Q&A Audit 22', icon: ShieldCheck, roles: ['super-admin'] },
     { to: '/qa23', label: 'Q&A Audit 23', icon: ShieldCheck, roles: ['super-admin'] },
     { to: '/qa24', label: 'Q&A Audit 24', icon: ShieldCheck, roles: ['super-admin'] },
+    { to: '/qa25', label: 'Q&A Audit 25', icon: ShieldCheck, roles: ['super-admin'] },
   ]},
 ]
 
