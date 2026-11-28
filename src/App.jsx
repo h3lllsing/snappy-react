@@ -58,6 +58,7 @@ const QaAudit22 = lazy(() => import('./pages/QaAudit22'))
 const QaAudit23 = lazy(() => import('./pages/QaAudit23'))
 const QaAudit24 = lazy(() => import('./pages/QaAudit24'))
 const QaAudit25 = lazy(() => import('./pages/QaAudit25'))
+const QaAudit26 = lazy(() => import('./pages/QaAudit26'))
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth()
@@ -140,6 +141,7 @@ export default function App() {
         <Route path="/qa23" element={<Protected roles={['super-admin']}><QaAudit23 /></Protected>} />
         <Route path="/qa24" element={<Protected roles={['super-admin']}><QaAudit24 /></Protected>} />
         <Route path="/qa25" element={<Protected roles={['super-admin']}><QaAudit25 /></Protected>} />
+        <Route path="/qa26" element={<Protected roles={['super-admin']}><QaAudit26 /></Protected>} />
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<NotFound />} />
