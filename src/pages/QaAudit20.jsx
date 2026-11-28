@@ -30,7 +30,7 @@ const ITEMS = [
   },
   {
     id: 6, title: 'Report (a) — sudo -l + NOPASSWD script', status: 'PASS',
-    evidence: `sudo -l`: `(ALL : ALL) ALL` aur `(root) NOPASSWD: /home/masood/REACT-snappy/tools/harden-config-cache.sh` — sirf ek NOPASSWD script. Owner/mode: script **775 masood:masood**, dir `tools/` **775 masood:masood** → masood khud edit kar sakta hai (and `(ALL:ALL) ALL` se root bhi ban sakta hai). Script sirf `chgrp`/`chmod` karta hai (config.php, portal-audit.key, .env, .env.bak*) — data delete nahi.',
+    evidence: 'sudo -l: "(ALL : ALL) ALL" aur "(root) NOPASSWD: /home/masood/REACT-snappy/tools/harden-config-cache.sh" — sirf ek NOPASSWD script. Owner/mode: script 775 masood:masood, dir tools/ 775 masood:masood → masood khud edit kar sakta hai (aur (ALL:ALL) ALL se root bhi ban sakta hai). Script sirf chgrp/chmod karta hai (config.php, portal-audit.key, .env, .env.bak*) — data delete nahi.',
     next: 'Least-privilege: NOPASSWD rule ko root-owned, 755, masood-unwritable path par le jana (ijazat se).',
   },
   {
