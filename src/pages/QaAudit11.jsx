@@ -15,8 +15,8 @@ const ITEMS = [
   },
   {
     id: 3, title: '19 failures: script ya daemon? 9 MiB throughput + SnappyMail UI test', status: 'FAIL',
-    evidence: '19 failures Python client ke 30s timeout/the thay (fresh connection + 180s par zyadaatar clear hue) — lekin **9 MiB `BODY[]` par fake IMAP se socket EOF aaya**, daemon journal me koi exception nahi. Chhote real mail (323 KB) throughput **4.9 MB/s**. 9 MiB ka MB/s measure nahi ho paya (connection EOF) → **NOT TESTED**. SnappyMail me bari mail kholne ka browser-level real test bhi **NOT TESTED** (browser automation available nahi). Code padh kar/unit test se PASS nahi likha.',
-    next: 'Fix: fake IMAP large-literal streaming ka diagnosis + controlled browser test — agle window me.',
+    evidence: 'FULL CHECK: 1032 rows, pehle 19 failures; 180s timeout + fresh connection se retry par **16 abhi bhi fail (`abort`)** — sab 9/12 MiB test mails (ids 9211-9229 group). Baaki 1016/1032 IMAP `BODY[]` sha256 match. DB/gz integrity 1032/1032 PASS hai — masla sirf fake IMAP large-literal response me hai. Chhote real mail (323 KB) throughput **4.9 MB/s**. 9 MiB ka MB/s measure nahi ho paya (connection EOF) → **NOT TESTED**. SnappyMail me bari mail kholne ka browser-level real test bhi **NOT TESTED** (browser automation available nahi). Code padh kar/unit test se PASS nahi likha.',
+    next: 'Fix P1: fake IMAP large-literal streaming/response ka diagnosis + controlled browser test — agle window me; yahan tak badi mail webmail me open nahi ho sakti.',
   },
   {
     id: 4, title: 'Test mail Message-ID list (803/804)', status: 'PASS',
